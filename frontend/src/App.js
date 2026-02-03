@@ -1,155 +1,145 @@
 import React, { useState } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import { Radar } from 'react-chartjs-2';
-import { 
-  Chart as ChartJS, 
-  RadialLinearScale, 
-  PointElement, 
-  LineElement, 
-  Filler, 
-  Tooltip, 
-  Legend 
-} from 'chart.js';
-
-// Register the chart components
-ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
 
 function App() {
   const [username, setUsername] = useState("");
-  const [step, setStep] = useState(1); // 1: Login, 2: Test, 3: Dashboard
-  const [scenario, setScenario] = useState("A high-value client is threatening to leave because of a small technical glitch. How do you handle this?");
+  const [step, setStep] = useState(1); // 1: Login, 2: Test, 3: Final Report
+  const [qCount, setQCount] = useState(1);
+  const [scenario, setScenario] = useState("Your first task: A customer is shouting because of a delayed order. How do you respond?");
   const [answer, setAnswer] = useState("");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [history, setHistory] = useState([]);
+  const [totalScore, setTotalScore] = useState(0);
 
-  // FIXED NAME: Changed to handleEvaluate to match the button
   const handleEvaluate = async () => {
     setLoading(true);
     try {
       const res = await fetch("http://localhost:5000/evaluate-and-generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, currentScenario: scenario, userAnswer: answer })
+        body: JSON.stringify({ username, currentScenario: scenario, userAnswer: answer, questionCount: qCount })
       });
-      const data = await responseOk(res);
+      const data = await res.json();
       setResult(data);
+      setTotalScore(prev => prev + data.score);
     } catch (err) {
-      console.error(err);
-      alert("Make sure your backend is running!");
+      alert("Check your connection!");
     }
     setLoading(false);
   };
 
-  const responseOk = async (res) => {
-    if (!res.ok) throw new Error("Server Error");
-    return await res.json();
-  }
-
-  const fetchHistory = async () => {
-    try {
-      const res = await fetch(`http://localhost:5000/history/${username}`);
-      const data = await res.json();
-      setHistory(data);
-      setStep(3);
-    } catch (err) {
-      alert("Could not fetch history.");
+  const proceed = () => {
+    if (qCount >= 10) {
+      setStep(3); // Go to Final Report
+    } else {
+      setScenario(result.nextScenario);
+      setQCount(qCount + 1);
+      setAnswer("");
+      setResult(null);
     }
   };
 
-  const startNext = () => {
-    setScenario(result.nextScenario);
-    setAnswer("");
-    setResult(null);
-  };
-
-  const chartData = {
-    labels: ['Overall Score', 'Tone', 'Logic'],
-    datasets: [{
-      label: 'Behavioral Analysis',
-      data: result ? [result.score, result.tone, result.logic] : [0, 0, 0],
-      backgroundColor: 'rgba(13, 110, 253, 0.2)',
-      borderColor: 'rgb(13, 110, 253)',
-      borderWidth: 2,
-    }]
-  };
-
   return (
-    <div className="container-fluid min-vh-100 bg-light py-5">
-      <div className="container">
+    <div className="min-vh-100 bg-light py-5 px-3">
+      <div className="container" style={{maxWidth: '900px'}}>
         
+        {/* LOGIN SCREEN */}
         {step === 1 && (
-          <div className="card shadow-lg p-5 mx-auto text-center" style={{maxWidth: '500px'}}>
-            <h1 className="display-6 fw-bold text-primary mb-4">AI Assessment System</h1>
-            <p className="text-muted">Enter your name to begin.</p>
-            <input className="form-control form-control-lg mb-3" placeholder="Full Name" onChange={e => setUsername(e.target.value)} />
-            <button className="btn btn-primary btn-lg w-100" onClick={() => setStep(2)} disabled={!username}>Start Test</button>
+          <div className="card shadow-lg border-0 p-5 text-center rounded-5">
+            <h1 className="fw-bold text-primary mb-3">Intelligent Assessment System</h1>
+            <p className="text-muted mb-4">You will face 10 adaptive AI scenarios. Good luck.</p>
+            <input className="form-control form-control-lg mb-3 text-center rounded-pill" placeholder="Enter Full Name" onChange={e => setUsername(e.target.value)} />
+            <button className="btn btn-primary btn-lg w-100 rounded-pill" onClick={() => setStep(2)} disabled={!username}>Start Assessment</button>
           </div>
         )}
 
+        {/* TEST SCREEN */}
         {step === 2 && (
-          <div className="row g-4">
-            <div className="col-lg-7">
-              <div className="card shadow border-0 p-4 h-100">
-                <h5 className="text-uppercase text-primary small fw-bold">Active Scenario</h5>
-                <p className="fs-4 italic my-4 text-dark italic">"{scenario}"</p>
-                
-                {!result ? (
-                  <>
-                    <textarea className="form-control mb-3 shadow-sm" rows="6" placeholder="Your response..." value={answer} onChange={e => setAnswer(e.target.value)} />
-                    <button className="btn btn-primary btn-lg" onClick={handleEvaluate} disabled={loading || !answer}>
-                      {loading ? "AI is Analyzing..." : "Submit Answer"}
-                    </button>
-                  </>
-                ) : (
-                  <div className="alert alert-success py-4 shadow-sm">
-                    <h5 className="fw-bold">Feedback:</h5>
-                    <p>{result.feedback}</p>
-                    <button className="btn btn-dark mt-2 me-2" onClick={startNext}>Next Scenario</button>
-                    <button className="btn btn-outline-primary mt-2" onClick={fetchHistory}>View Dashboard</button>
-                  </div>
-                )}
+          <div>
+            {/* Progress Visualization */}
+            <div className="mb-4">
+              <div className="d-flex justify-content-between mb-1">
+                <span className="fw-bold text-primary">Assessment Progress</span>
+                <span className="fw-bold">{qCount} / 10</span>
+              </div>
+              <div className="progress(round)" style={{height: '10px', borderRadius: '10px'}}>
+                <div className="progress-bar progress-bar-striped progress-bar-animated" style={{width: `${(qCount/10)*100}%`}}></div>
               </div>
             </div>
 
-            <div className="col-lg-5">
-              <div className="card shadow border-0 p-4 h-100 text-center">
-                <h5 className="text-uppercase text-muted small fw-bold mb-4">Intelligence Radar</h5>
-                <div style={{height: '300px'}}><Radar data={chartData} /></div>
-                {result && <h2 className="display-4 fw-bold text-primary mt-3">{result.score}/10</h2>}
+            <div className="row g-4">
+              <div className="col-lg-7">
+                <div className="card shadow-sm border-0 p-4 h-100 rounded-4">
+                  <h6 className="text-uppercase text-muted fw-bold">Scenario {qCount}</h6>
+                  <p className="fs-4 py-3 text-dark italic">"{scenario}"</p>
+                  
+                  {!result ? (
+                    <>
+                      <textarea className="form-control border-0 bg-light mb-3" rows="6" placeholder="Type your response..." value={answer} onChange={e => setAnswer(e.target.value)} style={{fontSize: '1.1rem'}} />
+                      <button className="btn btn-primary btn-lg rounded-pill px-5" onClick={handleEvaluate} disabled={loading || !answer}>
+                        {loading ? "AI is Analyzing..." : "Analyze & Continue"}
+                      </button>
+                    </>
+                  ) : (
+                    <div className="animate-in">
+                      <div className="p-3 bg-light rounded-3 mb-3 border-start border-primary border-4">
+                        <p className="mb-0">{result.feedback}</p>
+                      </div>
+                      <button className="btn btn-dark btn-lg rounded-pill w-100" onClick={proceed}>
+                        {qCount === 10 ? "View Final Performance Report" : "Go to Next Scenario"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* NEW WONDERFUL UI: Skill Bars */}
+              <div className="col-lg-5">
+                <div className="card shadow-sm border-0 p-4 h-100 rounded-4 text-center">
+                  <h5 className="fw-bold mb-4">Performance Metrics</h5>
+                  
+                  {result ? (
+                    <div className="mt-2">
+                      <div className="mb-4">
+                        <div className="d-flex justify-content-between small fw-bold"><span>Logic & Strategy</span><span>{result.logic*10}%</span></div>
+                        <div className="progress mt-1"><div className="progress-bar bg-info" style={{width: `${result.logic*10}%`}}></div></div>
+                      </div>
+                      <div className="mb-4">
+                        <div className="d-flex justify-content-between small fw-bold"><span>Emotional Intelligence</span><span>{result.tone*10}%</span></div>
+                        <div className="progress mt-1"><div className="progress-bar bg-success" style={{width: `${result.tone*10}%`}}></div></div>
+                      </div>
+                      <h1 className="display-2 fw-black text-primary mt-4">{result.score}<span className="fs-4 text-muted">/10</span></h1>
+                    </div>
+                  ) : (
+                    <div className="py-5 text-muted italic">Waiting for your response...</div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         )}
 
+        {/* FINAL REPORT SCREEN */}
         {step === 3 && (
-          <div className="card shadow border-0 p-4">
-            <div className="d-flex justify-content-between align-items-center mb-4">
-              <h2>Performance: {username}</h2>
-              <button className="btn btn-outline-primary" onClick={() => setStep(2)}>Take More Tests</button>
+          <div className="card shadow-lg border-0 p-5 text-center rounded-5 bg-white">
+            <div className="mb-4">
+               <span className="display-1">🏆</span>
             </div>
-            <div className="table-responsive">
-              <table className="table table-hover">
-                <thead className="table-dark">
-                  <tr>
-                    <th>Score</th>
-                    <th>Logic</th>
-                    <th>Tone</th>
-                    <th>Feedback</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {history.map((item, i) => (
-                    <tr key={i}>
-                      <td className="fw-bold">{item.score}/10</td>
-                      <td>{item.logic}</td>
-                      <td>{item.tone}</td>
-                      <td className="small">{item.feedback}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <h1 className="fw-bold text-dark">Assessment Complete</h1>
+            <h4 className="text-primary mb-4">{username}</h4>
+            
+            <div className="row justify-content-center mb-4">
+               <div className="col-6 col-md-4 p-3 bg-light rounded-4">
+                  <h6 className="text-muted uppercase small">Total Average</h6>
+                  <h2 className="fw-bold">{(totalScore/10).toFixed(1)}/10</h2>
+               </div>
             </div>
+
+            <p className="lead px-lg-5 text-secondary">
+              "You have completed the 10-level adaptive simulation. Based on your inputs, your behavioral intelligence is <b>{totalScore > 70 ? 'Superior' : totalScore > 50 ? 'Advanced' : 'Developing'}</b>."
+            </p>
+
+            <button className="btn btn-primary btn-lg rounded-pill px-5 mt-4" onClick={() => window.location.reload()}>Restart Assessment</button>
           </div>
         )}
 
