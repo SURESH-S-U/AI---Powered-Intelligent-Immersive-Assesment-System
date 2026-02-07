@@ -59,7 +59,7 @@ const App = () => {
                     ))}
                 </div>
                 <div className="logout-btn mt-auto" onClick={() => { localStorage.clear(); window.location.reload(); }}>
-                    <LogOut size={18}/> <span>Terminate Link</span>
+                    <LogOut size={18}/> <span>LogOut</span>
                 </div>
             </nav>
 
@@ -192,14 +192,14 @@ const DashboardView = ({user, setTab, history }) => {
     return (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
             <div className="mb-5 d-flex justify-content-between align-items-end">
-                <div><h6 className="text-primary fw-bold tracking-widest mb-2 uppercase">Core Status: Online</h6><h1 className="display-4 fw-black">Welcome, {user?.name}</h1></div>
+                <div><h6 className="text-primary fw-bold tracking-widest mb-2 uppercase">Status: Online</h6><h1 className="display-4 fw-black">Welcome, {user?.name}</h1></div>
                 <div className="p-3 px-4 rounded-4" style={glassStyle}><span className="small opacity-50 d-block">Intelligence Level</span><span className="h4 fw-black text-gradient">{user?.level}</span></div>
             </div>
             <div className="row g-4 mb-5">
                 {[
                     { label: 'Avg Accuracy', value: stats.accuracy, icon: <TrendingUp size={20}/>, color: '#3b82f6' },
-                    { label: 'Neural Syncs', value: stats.syncs, icon: <Activity size={20}/>, color: '#10b981' },
-                    { label: 'Logic Rating', value: stats.rating, icon: <ShieldCheck size={20}/>, color: '#8b5cf6' }
+                    { label: 'Assesments', value: stats.syncs, icon: <Activity size={20}/>, color: '#10b981' },
+                    { label: 'Rating', value: stats.rating, icon: <ShieldCheck size={20}/>, color: '#8b5cf6' }
                 ].map((s, i) => (
                     <div className="col-md-4" key={i}><div className="p-4" style={glassStyle}><div className="mb-3" style={{ color: s.color }}>{s.icon}</div><h2 className="fw-black mb-1">{s.value}</h2><p className="small opacity-40 uppercase tracking-widest mb-0">{s.label}</p></div></div>
                 ))}
@@ -207,8 +207,8 @@ const DashboardView = ({user, setTab, history }) => {
             <div className="row g-4">
                 <div className="col-md-8">
                     <div className="p-5 rounded-5 h-100" style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.15), transparent)', border: '1px solid rgba(59,130,246,0.2)' }}>
-                        <h2 className="fw-black mb-3">Initialize Neural Expansion</h2>
-                        <p className="opacity-60 mb-4 fs-5">Ready to assess your technical expertise? Our AI core is synchronized and waiting for your domain parameters.</p>
+                        <h2 className="fw-black mb-3">Initialize Neural Assesment</h2>
+                        <p className="opacity-60 mb-4 fs-5">Ready to assess your Skills ? Our AI core is synchronized and waiting for your domain parameters.</p>
                         <button className="btn btn-primary btn-lg rounded-pill px-5 fw-bold" onClick={() => setTab('assessments')}>START ASSESSMENT <ArrowRight size={18} className="ms-2"/></button>
                     </div>
                 </div>
@@ -260,7 +260,7 @@ const AssessmentCenter = ({ user, refreshHistory }) => {
                         </div>
                     </div>
                     <div className="col-md-3">
-                        <h6 className="text-primary fw-bold mb-3 uppercase tracking-widest">Protocol Type</h6>
+                        <h6 className="text-primary fw-bold mb-3 uppercase tracking-widest">Timer Type</h6>
                         <div className={`custom-input d-flex align-items-center justify-content-between cursor-pointer ${isTimed ? 'border-primary' : ''}`} onClick={() => setIsTimed(!isTimed)} style={{cursor: 'pointer'}}>
                             <span>{isTimed ? 'Timed (30s)' : 'No Timer'}</span>
                             {isTimed ? <Timer className="text-primary" size={20}/> : <TimerOff className="opacity-40" size={20}/>}
@@ -279,7 +279,7 @@ const AssessmentCenter = ({ user, refreshHistory }) => {
                             <div className="text-primary mb-4">{p.icon}</div>
                             <h4 className="fw-bold mb-3">{p.title}</h4>
                             <p className="small opacity-50 mb-4">{p.desc}</p>
-                            <div className="text-primary fw-bold small d-flex align-items-center gap-2 uppercase tracking-widest">Start Protocol <ArrowRight size={14}/></div>
+                            <div className="text-primary fw-bold small d-flex align-items-center gap-2 uppercase tracking-widest">Start Assesment <ArrowRight size={14}/></div>
                         </div>
                     </div>
                 ))}
@@ -443,6 +443,7 @@ const ActiveSession = ({ user, domains, type, limit, isTimed, onEnd }) => {
 
 const ReportsView = ({ user, history, loading }) => {
     const [expandedSession, setExpandedSession] = useState(null);
+    
     const sessions = useMemo(() => {
         const groups = {};
         history.forEach(item => {
@@ -457,23 +458,103 @@ const ReportsView = ({ user, history, loading }) => {
         }).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
     }, [history]);
 
+    // Helper to format date as DD-MM-YYYY
+    const formatDate = (dateString) => {
+        const d = new Date(dateString);
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        return `${day}-${month}-${year}`;
+    };
+
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <div className="mb-5"><h1 className="fw-black mb-1">Intelligence History</h1><p className="opacity-50">Review overall session sync levels or drill down into specifics.</p></div>
-            {loading ? <div className="text-center py-5"><Loader2 className="spinner-border text-primary" /></div> : (
-                <div className="row g-4"><div className="col-md-12">{sessions.map((s) => (
-                    <div key={s.id} className="p-4 mb-3 rounded-4" style={glassStyle}>
-                        <div className="d-flex justify-content-between align-items-center">
-                            <div onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)} style={{cursor: 'pointer'}}><span className="badge bg-primary bg-opacity-20 text-primary mb-2">SESSION: {s.domain?.toUpperCase() || "GENERAL"}</span><h4 className="mb-0 fw-bold">Sync Level: <span className="text-primary">{s.avgScore}%</span></h4><p className="small opacity-40 mb-0 mt-1">{new Date(s.timestamp).toLocaleString()} • {s.items.length} Challenges</p></div>
-                            <button className="btn btn-outline-primary rounded-pill px-4 btn-sm" onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)}>{expandedSession === s.id ? "Hide Details" : "View Details"}</button>
-                        </div>
-                        <AnimatePresence>{expandedSession === s.id && (
-                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden mt-4 pt-4 border-top border-white border-opacity-10"><div className="row g-3">{s.items.map((item, idx) => (
-                                <div key={idx} className="col-12"><div className="p-3 rounded-3" style={{background: 'rgba(255,255,255,0.02)'}}><div className="d-flex justify-content-between mb-2"><span className="text-primary small fw-bold">CHALLENGE {idx + 1}</span><span className={`fw-bold ${item.score === 0 ? 'text-danger' : 'text-primary'}`}>{item.score * 10}%</span></div><p className="small mb-2 fw-bold">Q: {item.challenge}</p><p className="small opacity-50 mb-0 italic">Feedback: {item.feedback}</p></div></div>
-                            ))}</div></motion.div>
-                        )}</AnimatePresence>
+            <div className="mb-5">
+                <h1 className="fw-black mb-1">Assessment History</h1>
+                <p className="opacity-50">Review overall session accuracy levels or drill down into specifics.</p>
+            </div>
+
+            {loading ? (
+                <div className="text-center py-5"><Loader2 className="spinner-border text-primary" /></div>
+            ) : (
+                <div className="row g-4">
+                    <div className="col-md-12">
+                        {sessions.map((s) => (
+                            <div key={s.id} className="p-4 mb-3 rounded-4" style={glassStyle}>
+                                <div className="d-flex justify-content-between align-items-center">
+                                    <div 
+                                        onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)} 
+                                        style={{cursor: 'pointer', flex: 1}}
+                                    >
+                                        <h4 className="mb-0 fw-bold">
+                                            Accuracy Level: <span className="text-primary">{s.avgScore}%</span>
+                                        </h4>
+                                        
+                                        {/* Main Session Bar (Kept below accuracy level) */}
+                                        <div className="progress mt-3 mb-2" style={{ height: '6px', background: 'rgba(255,255,255,0.1)', width: '100%', maxWidth: '350px' }}>
+                                            <motion.div 
+                                                initial={{ width: 0 }}
+                                                animate={{ width: `${s.avgScore}%` }}
+                                                transition={{ duration: 1 }}
+                                                className="progress-bar bg-primary"
+                                            />
+                                        </div>
+
+                                        <p className="small opacity-40 mb-0">
+                                            {s.domain?.toUpperCase() || "GENERAL"} • {formatDate(s.timestamp)} • {s.items.length} Challenges
+                                        </p>
+                                    </div>
+                                    <button 
+                                        className="btn btn-outline-primary rounded-pill px-4 btn-sm" 
+                                        onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)}
+                                    >
+                                        {expandedSession === s.id ? "Hide Details" : "View Details"}
+                                    </button>
+                                </div>
+
+                                <AnimatePresence>
+                                    {expandedSession === s.id && (
+                                        <motion.div 
+                                            initial={{ height: 0, opacity: 0 }} 
+                                            animate={{ height: 'auto', opacity: 1 }} 
+                                            exit={{ height: 0, opacity: 0 }} 
+                                            className="overflow-hidden mt-4 pt-4 border-top border-white border-opacity-10"
+                                        >
+                                            <div className="row g-3">
+                                                {s.items.map((item, idx) => {
+                                                    const itemPercent = item.score * 10;
+                                                    return (
+                                                        <div key={idx} className="col-12">
+                                                            <div className="p-3 rounded-3" style={{background: 'rgba(255,255,255,0.02)'}}>
+                                                                <div className="d-flex justify-content-between align-items-center mb-2">
+                                                                    <span className="text-primary small fw-bold">CHALLENGE {idx + 1}</span>
+                                                                    <span className={`fw-bold ${itemPercent === 0 ? 'text-danger' : 'text-primary'}`}>
+                                                                        {itemPercent}%
+                                                                    </span>
+                                                                </div>
+                                                                
+                                                                {/* Challenge Level Bars (Kept) */}
+                                                                <div className="progress mb-3" style={{ height: '4px', background: 'rgba(255,255,255,0.05)' }}>
+                                                                    <div 
+                                                                        className={`progress-bar ${itemPercent === 0 ? 'bg-danger' : 'bg-primary'}`} 
+                                                                        style={{ width: `${itemPercent}%` }}
+                                                                    />
+                                                                </div>
+
+                                                                <p className="small mb-2 fw-bold">Q: {item.challenge}</p>
+                                                                <p className="small opacity-50 mb-0 italic">Feedback: {item.feedback}</p>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+                        ))}
                     </div>
-                ))}</div></div>
+                </div>
             )}
         </motion.div>
     );

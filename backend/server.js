@@ -32,8 +32,8 @@ const cleanJSON = (text) => {
 
 const localBackups = {
     adaptive: [
-        { challenge: "Scenario: You are designing a database for an e-commerce site. Question: How would you handle many-to-many relationships between Products and Orders?", correct: "junction table" },
-        { challenge: "Scenario: A web page is loading very slowly due to large images. Question: Describe the best approach to optimize image delivery without losing quality.", correct: "compression" }
+        { challenge: "Scenario: A button needs a shadow. Question: Which CSS property creates an inner or outer shadow effect?", correct: "box-shadow" },
+        { challenge: "Scenario: A div is overflowing its container. Question: How do you hide the content that sticks out?", correct: "overflow: hidden" }
     ],
     multi: [
         { challenge: "Scenario: Coding a landing page. Question: Which HTML tag is for the largest heading?", options: ["<h6>", "<h1>", "<head>", "<header>"], correct: "<h1>" },
@@ -65,22 +65,34 @@ app.post("/generate-assessment", async (req, res) => {
     const { type, domains } = req.body;
     const domainStr = domains?.length > 0 ? domains.join(", ") : "General";
     
+    // Create a random seed to prevent repetitive AI responses
+    const randomSeed = Math.floor(Math.random() * 10000);
+    
     try {
         const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
         
-        // Prompt modification for Adaptive Scenario (No options)
         let prompt = "";
         if (type === 'adaptive') {
-            prompt = `Create a complex scenario-based logic question about ${domainStr}. Do NOT provide multiple choice options. The question must require a descriptive text answer. Format: Scenario: [Context] Question: [Question]? JSON ONLY: {"challenge": "Scenario: ... Question: ..."}`;
+            // Updated Prompt: Added length constraints (2 lines/30 words) and uniqueness instruction
+            prompt = `Generate a UNIQUE, very short scenario-based logic question about ${domainStr}. 
+            Constraint: The entire text MUST be under 30 words (maximum 2 short sentences). 
+            Seed: ${randomSeed}. No multiple choice. 
+            Format: Scenario: [Context] Question: [Question]? 
+            JSON ONLY: {"challenge": "Scenario: ... Question: ..."}`;
         } else {
-            prompt = `Create a beginner ${type} assessment about ${domainStr}. Provide 4 multiple choice options. Format: Scenario: [Context] Question: [Question]? JSON ONLY: {"challenge": "Scenario: ... Question: ...", "options": ["A", "B", "C", "D"]}`;
+            // Updated Prompt for Multi/General to ensure variety and brevity
+            prompt = `Generate a UNIQUE beginner ${type} assessment about ${domainStr}. 
+            Keep the question short (under 25 words). Seed: ${randomSeed}. 
+            Provide 4 multiple choice options. 
+            JSON ONLY: {"challenge": "Scenario: ... Question: ...", "options": ["A", "B", "C", "D"]}`;
         }
 
         const result = await model.generateContent(prompt);
         const data = cleanJSON(result.response.text());
-        if (!data) throw new Error();
+        if (!data) throw new Error("Invalid AI Response");
         res.json(data);
     } catch (e) {
+        // Fallback logic
         const pool = localBackups[type] || localBackups.adaptive;
         const random = pool[Math.floor(Math.random() * pool.length)];
         res.json({ ...random, isFallback: true });
