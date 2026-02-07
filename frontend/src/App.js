@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     LayoutDashboard, BookOpen, BarChart3, LogOut, Brain, Zap, 
-    Loader2, X, Plus, ArrowRight, Target, Globe, Award, TrendingUp, 
-    History as HistoryIcon, Activity, ShieldCheck, Lock, Mail, User as UserIcon, Timer, TimerOff
+    Loader2, X, Plus, ArrowRight, Target, Globe,TrendingUp, 
+    Activity, ShieldCheck, Lock, Mail, User as UserIcon, Timer, TimerOff,Calendar
 } from 'lucide-react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
@@ -155,7 +155,16 @@ const AuthPage = ({ onAuth }) => {
     );
 };
 
-const DashboardView = ({user, setTab, history }) => {
+const DashboardView = ({ user, setTab, history }) => {
+    // Custom style for the gradient text effect
+    const gradientTextStyle = {
+        background: 'linear-gradient(135deg, #60a5fa 0%, #a855f7 50%, #ec4899 100%)',
+        WebkitBackgroundClip: 'text',
+        WebkitTextFillColor: 'transparent',
+        backgroundSize: '200% auto',
+        display: 'inline-block'
+    };
+
     const stats = useMemo(() => {
         const totalQs = history.length;
         const uniqueSessions = new Set(history.map(h => h.sessionId)).size;
@@ -189,24 +198,47 @@ const DashboardView = ({user, setTab, history }) => {
     return (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
             <div className="mb-5 d-flex justify-content-between align-items-end">
-                <div><h6 className="text-primary fw-bold tracking-widest mb-2 uppercase">Status: Online</h6><h1 className="display-4 fw-black">Welcome, {user?.name}</h1></div>
-                <div className="p-3 px-4 rounded-4" style={glassStyle}><span className="small opacity-50 d-block">Intelligence Level</span><span className="h4 fw-black text-gradient">{user?.level}</span></div>
+                <div>
+                    <h6 className="text-primary fw-bold tracking-widest mb-2 uppercase" style={{ fontSize: '0.75rem', marginTop:"-80px" }}>Status: Online</h6>
+                    {/* Reduced font size from display-4 to h2 and added gradient */}
+                    <h1 className="fw-black mb-0">
+                        Welcome, <span style={gradientTextStyle}>{user?.name}</span>
+                    </h1>
+                </div>
+                <div className="p-3 px-4 rounded-4" style={glassStyle}>
+                    <span className="small opacity-50 d-block">Intelligence Level</span>
+                    <span className="h4 fw-black text-gradient">{user?.level}</span>
+                </div>
             </div>
+
             <div className="row g-4 mb-5">
                 {[
                     { label: 'Avg Accuracy', value: stats.accuracy, icon: <TrendingUp size={20}/>, color: '#3b82f6' },
                     { label: 'Assesments', value: stats.syncs, icon: <Activity size={20}/>, color: '#10b981' },
                     { label: 'Rating', value: stats.rating, icon: <ShieldCheck size={20}/>, color: '#8b5cf6' }
                 ].map((s, i) => (
-                    <div className="col-md-4" key={i}><div className="p-4" style={glassStyle}><div className="mb-3" style={{ color: s.color }}>{s.icon}</div><h2 className="fw-black mb-1">{s.value}</h2><p className="small opacity-40 uppercase tracking-widest mb-0">{s.label}</p></div></div>
+                    <div className="col-md-4" key={i}>
+                        <div className="p-4" style={glassStyle}>
+                            <div className="mb-3" style={{ color: s.color }}>{s.icon}</div>
+                            <h2 className="fw-black mb-1">{s.value}</h2>
+                            <p className="small opacity-40 uppercase tracking-widest mb-0">{s.label}</p>
+                        </div>
+                    </div>
                 ))}
             </div>
+
             <div className="row g-4">
                 <div className="col-md-8">
                     <div className="p-5 rounded-5 h-100" style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.15), transparent)', border: '1px solid rgba(59,130,246,0.2)' }}>
-                        <h2 className="fw-black mb-3">Initialize Neural Assesment</h2>
-                        <p className="opacity-60 mb-4 fs-5">Ready to assess your Skills ? Our AI core is synchronized and waiting for your domain parameters.</p>
-                        <button className="btn btn-primary btn-lg rounded-pill px-5 fw-bold" onClick={() => setTab('assessments')}>START ASSESSMENT <ArrowRight size={18} className="ms-2"/></button>
+                        {/* Reduced from h2 to h4 */}
+                        <h4 className="fw-black mb-3">Initialize Neural Assessment</h4>
+                        {/* Reduced from fs-5 to small/opacity */}
+                        <p className="opacity-60 mb-4" style={{ fontSize: '1rem', lineHeight: '1.6' }}>
+                            Ready to assess your Skills? Our AI core is synchronized and waiting for your domain parameters.
+                        </p>
+                        <button className="btn btn-primary btn-lg rounded-pill px-5 fw-bold" style={{ fontSize: '0.9rem' }} onClick={() => setTab('assessments')}>
+                            START ASSESSMENT <ArrowRight size={18} className="ms-2"/>
+                        </button>
                     </div>
                 </div>
                 <div className="col-md-4">
@@ -214,8 +246,13 @@ const DashboardView = ({user, setTab, history }) => {
                         <h6 className="fw-bold mb-4 opacity-50">SKILL MATRIX</h6>
                         {(skillMatrix.length > 0 ? skillMatrix : [{name: 'Waiting for Data', percent: 0}]).map(skill => (
                             <div className="mb-4" key={skill.name}>
-                                <div className="d-flex justify-content-between mb-2 small fw-bold"><span>{skill.name}</span><span className="text-primary">{skill.percent}%</span></div>
-                                <div className="progress" style={{ height: '4px', background: 'rgba(255,255,255,0.05)' }}><div className="progress-bar bg-primary" style={{ width: `${skill.percent}%` }}></div></div>
+                                <div className="d-flex justify-content-between mb-2 small fw-bold">
+                                    <span>{skill.name}</span>
+                                    <span className="text-primary">{skill.percent}%</span>
+                                </div>
+                                <div className="progress" style={{ height: '4px', background: 'rgba(255,255,255,0.05)' }}>
+                                    <div className="progress-bar bg-primary" style={{ width: `${skill.percent}%` }}></div>
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -285,6 +322,8 @@ const AssessmentCenter = ({ user, refreshHistory }) => {
     );
 };
 
+// ... (Keep imports and styles exactly as they are)
+
 const ActiveSession = ({ user, domains, type, limit, isTimed, onEnd }) => {
     const [questions, setQuestions] = useState([]);
     const [currentStep, setCurrentStep] = useState(0);
@@ -313,6 +352,36 @@ const ActiveSession = ({ user, domains, type, limit, isTimed, onEnd }) => {
 
     useEffect(() => { fetchAllQuestions(); }, [fetchAllQuestions]);
 
+    // NEW: Wrapped in useCallback to solve warning
+    const submitBatch = useCallback(async (finalAnswers) => {
+        setEvaluating(true);
+        try {
+            const res = await fetch(`${API_URL}/evaluate-batch`, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username: user.name, answers: finalAnswers, domains, sessionId, type })
+            });
+            const data = await res.json();
+            setResults(data.results);
+        } catch (e) { alert("Evaluation sync error."); }
+        finally { setEvaluating(false); }
+    }, [user.name, domains, sessionId, type]);
+
+    // NEW: Wrapped in useCallback to solve warning
+    const handleNext = useCallback((autoAnswer = null) => {
+        clearInterval(timerRef.current);
+        const finalAnswer = autoAnswer || currentInput || "No response provided";
+        const updatedAnswers = [...answers, { challenge: questions[currentStep].challenge, answer: finalAnswer }];
+        setAnswers(updatedAnswers);
+        setCurrentInput("");
+
+        if (currentStep < questions.length - 1) {
+            setCurrentStep(prev => prev + 1);
+        } else {
+            submitBatch(updatedAnswers);
+        }
+    }, [answers, questions, currentStep, currentInput, submitBatch]);
+
+    // UPDATED: Added handleNext and isTimed to dependencies
     useEffect(() => {
         if (isTimed && !loading && !evaluating && !results && currentStep < questions.length) {
             setTimeLeft(30);
@@ -328,34 +397,7 @@ const ActiveSession = ({ user, domains, type, limit, isTimed, onEnd }) => {
             }, 1000);
         }
         return () => clearInterval(timerRef.current);
-    }, [loading, evaluating, results, currentStep, questions.length]);
-
-    const handleNext = (autoAnswer = null) => {
-        clearInterval(timerRef.current);
-        const finalAnswer = autoAnswer || currentInput || "No response provided";
-        const updatedAnswers = [...answers, { challenge: questions[currentStep].challenge, answer: finalAnswer }];
-        setAnswers(updatedAnswers);
-        setCurrentInput("");
-
-        if (currentStep < questions.length - 1) {
-            setCurrentStep(prev => prev + 1);
-        } else {
-            submitBatch(updatedAnswers);
-        }
-    };
-
-    const submitBatch = async (finalAnswers) => {
-        setEvaluating(true);
-        try {
-            const res = await fetch(`${API_URL}/evaluate-batch`, {
-                method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ username: user.name, answers: finalAnswers, domains, sessionId, type })
-            });
-            const data = await res.json();
-            setResults(data.results);
-        } catch (e) { alert("Evaluation sync error."); }
-        finally { setEvaluating(false); }
-    };
+    }, [loading, evaluating, results, currentStep, questions.length, handleNext, isTimed]);
 
     const overallAccuracy = useMemo(() => {
         if (!results) return 0;
@@ -363,11 +405,13 @@ const ActiveSession = ({ user, domains, type, limit, isTimed, onEnd }) => {
         return Math.round((total / (questions.length * 10)) * 100);
     }, [results, questions.length]);
 
+    // ... (Keep the rest of the return JSX exactly as you have it)
     if (loading) return <div className="text-center py-5"><Loader2 className="spinner-border text-primary mb-3" /><p className="fw-bold opacity-50">SYNCING NEURAL LINK...</p></div>;
 
     return (
         <div className="mx-auto" style={{ maxWidth: '850px' }}>
             <div className="p-5" style={glassStyle}>
+                {/* ... (rest of your component code) */}
                 <div className="d-flex justify-content-between mb-4 align-items-center">
                     <span className="text-primary fw-bold small tracking-widest uppercase">
                         {results ? "Protocol Summary" : `${type.toUpperCase()} - Q ${currentStep + 1}/${limit}`}
@@ -441,6 +485,14 @@ const ActiveSession = ({ user, domains, type, limit, isTimed, onEnd }) => {
 
 const ReportsView = ({ user, history, loading }) => {
     const [expandedSession, setExpandedSession] = useState(null);
+
+    // Style for the Date & Challenges Highlight Box
+    const metaBoxStyle = {
+        background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%)',
+        border: '1px solid rgba(139, 92, 246, 0.3)',
+        backdropFilter: 'blur(10px)',
+    };
+
     const sessions = useMemo(() => {
         const groups = {};
         history.forEach(item => {
@@ -452,52 +504,115 @@ const ReportsView = ({ user, history, loading }) => {
             const total = s.items.reduce((acc, curr) => acc + curr.score, 0);
             s.avgScore = Math.round((total / (s.items.length * 10)) * 100);
             return s;
-        }).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+        }).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     }, [history]);
 
     const formatDate = (dateString) => {
         const d = new Date(dateString);
-        return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+        return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getFullYear()).slice(-2)}`;
     };
 
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <div className="mb-5"><h1 className="fw-black mb-1">Assessment History</h1><p className="opacity-50">Review overall session accuracy levels or drill down into specifics.</p></div>
-            {loading ? <div className="text-center py-5"><Loader2 className="spinner-border text-primary" /></div> : (
-                <div className="row g-4"><div className="col-md-12">{sessions.map((s) => (
-                    <div key={s.id} className="p-4 mb-3 rounded-4" style={glassStyle}>
-                        <div className="d-flex justify-content-between align-items-center">
-                            <div onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)} style={{cursor: 'pointer', flex: 1}}>
-                                <h4 className="mb-0 fw-bold">Accuracy Level: <span className="text-primary">{s.avgScore}%</span></h4>
-                                <div className="progress mt-3 mb-2" style={{ height: '6px', background: 'rgba(255,255,255,0.1)', width: '100%', maxWidth: '350px' }}>
-                                    <motion.div initial={{ width: 0 }} animate={{ width: `${s.avgScore}%` }} transition={{ duration: 1 }} className="progress-bar bg-primary"/>
+            <div className="mb-5">
+                <h2 className="fw-black mb-1">Assessment History</h2>
+                <p className="opacity-50 small">Detailed breakdown of your neural synchronization sessions.</p>
+            </div>
+
+            {loading ? (
+                <div className="text-center py-5"><Loader2 className="spinner-border text-primary" /></div>
+            ) : (
+                <div className="row g-4">
+                    <div className="col-md-12">
+                        {sessions.map((s) => (
+                            <div key={s.id} className="p-4 mb-3 rounded-4" style={glassStyle}>
+                                <div className="d-flex justify-content-between align-items-center mb-4">
+                                    {/* Left: Domain & Accuracy */}
+                                    <div 
+                                        onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)} 
+                                        style={{ cursor: 'pointer' }}
+                                    >
+                                        <h2 className="fw-black mb-0 tracking-tight text-uppercase" style={{ fontSize: '1.6rem' }}>
+                                            {s.domain || "General"}
+                                        </h2>
+                                        <div className="fw-bold text-primary" style={{ fontSize: '1.1rem' }}>
+                                            {s.avgScore}% <span className="small opacity-50 fw-normal ms-1">Accuracy</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Right: Date & Challenges in a Classy Gradient Box */}
+                                    <div className="px-3 py-2 rounded-pill d-flex align-items-center gap-3" style={metaBoxStyle}>
+                                        <div className="d-flex align-items-center gap-2">
+                                            <Calendar size={14} className="text-primary opacity-75" />
+                                            <span className="small fw-bold opacity-80">{formatDate(s.timestamp)}</span>
+                                        </div>
+                                        <div style={{ width: '1px', height: '12px', background: 'rgba(255,255,255,0.2)' }}></div>
+                                        <div className="d-flex align-items-center gap-2">
+                                            <Zap size={14} className="text-primary opacity-75" />
+                                            <span className="small fw-bold opacity-80">{s.items.length} Challenges</span>
+                                        </div>
+                                    </div>
                                 </div>
-                                <p className="small opacity-40 mb-0">{s.domain?.toUpperCase() || "GENERAL"} • {formatDate(s.timestamp)} • {s.items.length} Challenges</p>
+
+                                {/* Progress & Action Area */}
+                                <div className="d-flex align-items-center gap-4">
+                                    <div className="progress flex-grow-1" style={{ height: '4px', background: 'rgba(255,255,255,0.05)' }}>
+                                        <motion.div 
+                                            initial={{ width: 0 }} 
+                                            animate={{ width: `${s.avgScore}%` }} 
+                                            className="progress-bar bg-primary shadow-sm"
+                                        />
+                                    </div>
+                                    <button 
+                                        className="btn btn-primary btn-sm rounded-pill px-4 fw-bold" 
+                                        style={{ fontSize: '0.7rem', letterSpacing: '1px' }}
+                                        onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)}
+                                    >
+                                        {expandedSession === s.id ? "HIDE ANALYTICS" : "VIEW ANALYTICS"}
+                                    </button>
+                                </div>
+
+                                <AnimatePresence>
+                                    {expandedSession === s.id && (
+                                        <motion.div 
+                                            initial={{ height: 0, opacity: 0 }} 
+                                            animate={{ height: 'auto', opacity: 1 }} 
+                                            exit={{ height: 0, opacity: 0 }} 
+                                            className="overflow-hidden mt-4 pt-4 border-top border-white border-opacity-10"
+                                        >
+                                            <div className="row g-3">
+                                                {s.items.map((item, idx) => {
+                                                    const itemPercent = item.score * 10;
+                                                    return (
+                                                        <div key={idx} className="col-12">
+                                                            {/* Highlighted Challenge Card */}
+                                                            <div className="p-3 rounded-4" style={{ 
+                                                                background: 'rgba(255,255,255,0.03)', 
+                                                                borderLeft: `4px solid ${itemPercent === 0 ? '#ef4444' : '#3b82f6'}`,
+                                                                boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
+                                                            }}>
+                                                                <div className="d-flex justify-content-between align-items-center mb-2">
+                                                                    <span className="small fw-black opacity-40 uppercase tracking-widest" style={{ fontSize: '0.6rem' }}>Challenge {idx + 1}</span>
+                                                                    <span className={`fw-black ${itemPercent === 0 ? 'text-danger' : 'text-primary'}`}>{itemPercent}%</span>
+                                                                </div>
+                                                                <p className="fw-bold mb-2" style={{ fontSize: '0.9rem' }}>{item.challenge}</p>
+                                                                <div className="p-2 rounded-3" style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                                                    <p className="small opacity-60 mb-0 italic" style={{ fontSize: '0.8rem' }}>
+                                                                        <span className="text-primary fw-bold">Feedback:</span> {item.feedback}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
                             </div>
-                            <button className="btn btn-outline-primary rounded-pill px-4 btn-sm" onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)}>{expandedSession === s.id ? "Hide Details" : "View Details"}</button>
-                        </div>
-                        <AnimatePresence>{expandedSession === s.id && (
-                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden mt-4 pt-4 border-top border-white border-opacity-10">
-                                <div className="row g-3">{s.items.map((item, idx) => {
-                                    const itemPercent = item.score * 10;
-                                    return (
-                                        <div key={idx} className="col-12"><div className="p-3 rounded-3" style={{background: 'rgba(255,255,255,0.02)'}}>
-                                            <div className="d-flex justify-content-between align-items-center mb-2">
-                                                <span className="text-primary small fw-bold">CHALLENGE {idx + 1}</span>
-                                                <span className={`fw-bold ${itemPercent === 0 ? 'text-danger' : 'text-primary'}`}>{itemPercent}%</span>
-                                            </div>
-                                            <div className="progress mb-3" style={{ height: '4px', background: 'rgba(255,255,255,0.05)' }}>
-                                                <div className={`progress-bar ${itemPercent === 0 ? 'bg-danger' : 'bg-primary'}`} style={{ width: `${itemPercent}%` }}/>
-                                            </div>
-                                            <p className="small mb-2 fw-bold">Q: {item.challenge}</p>
-                                            <p className="small opacity-50 mb-0 italic">Feedback: {item.feedback}</p>
-                                        </div></div>
-                                    );
-                                })}</div>
-                            </motion.div>
-                        )}</AnimatePresence>
+                        ))}
                     </div>
-                ))}</div></div>
+                </div>
             )}
         </motion.div>
     );
