@@ -44,8 +44,8 @@ const App = () => {
         <div className="d-flex vh-100 overflow-hidden text-white w-100" style={{ background: '#020617', fontFamily: "'Inter', sans-serif" }}>
             <nav className="sidebar-container d-flex flex-column p-4 h-100">
                 <div className="d-flex align-items-center gap-3 mb-5 px-2">
-                    <div className="p-2 rounded-3 bg-primary bg-opacity-20"><Brain size={28} className="text-primary" /></div>
-                    <h4 className="fw-black mb-0 tracking-tighter">NEXA INTEL</h4>
+                    <div className="p-2 rounded-3 bg-opacity-20"><Brain size={32} className="text-primary" /></div>
+                    <h4 className="fw-black mb-0 tracking-tighter">IntelliTest</h4>
                 </div>
                 <div className="flex-grow-1">
                     {[
@@ -123,14 +123,14 @@ const AuthPage = ({ onAuth }) => {
             <div className="auth-card">
                 <div className="auth-header">
                     <div className="auth-logo-box"><Brain size={32} className="text-primary" /></div>
-                    <h2 className="auth-title">NEXA <span className="text-primary">INTEL</span></h2>
-                    <p className="auth-subtitle">{isRegister ? "IDENTITY CREATION PROTOCOL" : "NEURAL ACCESS INTERFACE"}</p>
+                    <h2 className="auth-title">Intelli <span className="text-primary">Test</span></h2>
+                    <p className="auth-subtitle">{isRegister ? "IDENTITY CREATION PROTOCOL" : "Intelligent Assesment System"}</p>
                 </div>
                 <form onSubmit={handleSubmit} className="auth-form">
                     {isRegister && <div className="input-field"><UserIcon size={18} className="input-icon" /><input type="text" placeholder="Full Name" onChange={e => setFormData({ ...formData, username: e.target.value })} required /></div>}
-                    <div className="input-field"><Mail size={18} className="input-icon" /><input type="email" placeholder="Neural ID (Email)" onChange={e => setFormData({ ...formData, email: e.target.value })} required /></div>
+                    <div className="input-field"><Mail size={18} className="input-icon" /><input type="email" placeholder="Email ID" onChange={e => setFormData({ ...formData, email: e.target.value })} required /></div>
                     <div className="input-field"><Lock size={18} className="input-icon" /><input type="password" placeholder="Secure Passkey" onChange={e => setFormData({ ...formData, password: e.target.value })} required /></div>
-                    <button className="auth-btn" disabled={loading}>{loading ? <Loader2 className="spinner-border spinner-border-sm" /> : <>{isRegister ? "CREATE PROFILE" : "INITIALIZE LINK"}<ArrowRight size={18} className="ms-2" /></>}</button>
+                    <button className="auth-btn" disabled={loading}>{loading ? <Loader2 className="spinner-border spinner-border-sm" /> : <>{isRegister ? "CREATE PROFILE" : "Lets Start"}<ArrowRight size={18} className="ms-2" /></>}</button>
                 </form>
                 <div className="auth-footer"><span>{isRegister ? "Already have a profile?" : "New subject identifier?"}</span><button className="switch-mode-btn" onClick={() => setIsRegister(!isRegister)}>{isRegister ? "Login to Link" : "Create New Profile"}</button></div>
             </div>
@@ -158,12 +158,9 @@ const AuthPage = ({ onAuth }) => {
 const DashboardView = ({user, setTab, history }) => {
     const stats = useMemo(() => {
         const totalQs = history.length;
-        // Logic fix: Unique session IDs represent completed or ongoing sessions
         const uniqueSessions = new Set(history.map(h => h.sessionId)).size;
-        
         const totalPossibleScore = totalQs * 10;
         const totalActualScore = history.reduce((acc, curr) => acc + curr.score, 0);
-        
         const avgAccuracy = totalPossibleScore > 0 ? Math.round((totalActualScore / totalPossibleScore) * 100) : 0;
         
         let rating = "C";
@@ -289,41 +286,41 @@ const AssessmentCenter = ({ user, refreshHistory }) => {
 };
 
 const ActiveSession = ({ user, domains, type, limit, isTimed, onEnd }) => {
-    const [scenario, setScenario] = useState(null);
-    const [answer, setAnswer] = useState("");
-    const [result, setResult] = useState(null);
+    const [questions, setQuestions] = useState([]);
+    const [currentStep, setCurrentStep] = useState(0);
+    const [answers, setAnswers] = useState([]);
+    const [currentInput, setCurrentInput] = useState("");
+    const [results, setResults] = useState(null);
     const [loading, setLoading] = useState(true);
     const [evaluating, setEvaluating] = useState(false);
-    const [currentStep, setCurrentStep] = useState(1);
-    const [sessionScores, setSessionScores] = useState([]);
     const [sessionId] = useState(`session_${Date.now()}`);
     const [timeLeft, setTimeLeft] = useState(30);
     const timerRef = useRef(null);
 
-    const fetchChallenge = useCallback(async () => {
-        setLoading(true); setScenario(null); setAnswer(""); setResult(null); setTimeLeft(30);
+    const fetchAllQuestions = useCallback(async () => {
+        setLoading(true);
         try {
             const res = await fetch(`${API_URL}/generate-assessment`, { 
                 method: "POST", 
                 headers: { "Content-Type": "application/json" }, 
-                body: JSON.stringify({ type, level: user.level, domains }) 
+                body: JSON.stringify({ type, level: user.level, domains, limit }) 
             });
             const data = await res.json();
-            setScenario(data);
+            setQuestions(data.questions || []);
         } catch (e) { alert("Core Link Failed"); onEnd(); }
         finally { setLoading(false); }
-    }, [user.level, domains, type, onEnd]);
+    }, [user.level, domains, type, limit, onEnd]);
 
-    useEffect(() => { fetchChallenge(); }, [fetchChallenge]);
+    useEffect(() => { fetchAllQuestions(); }, [fetchAllQuestions]);
 
-    // Timer Logic
     useEffect(() => {
-        if (isTimed && !loading && !evaluating && !result && currentStep !== -1) {
+        if (isTimed && !loading && !evaluating && !results && currentStep < questions.length) {
+            setTimeLeft(30);
             timerRef.current = setInterval(() => {
                 setTimeLeft(prev => {
                     if (prev <= 1) {
                         clearInterval(timerRef.current);
-                        autoSubmit();
+                        handleNext("No response provided");
                         return 0;
                     }
                     return prev - 1;
@@ -331,49 +328,52 @@ const ActiveSession = ({ user, domains, type, limit, isTimed, onEnd }) => {
             }, 1000);
         }
         return () => clearInterval(timerRef.current);
-    }, [loading, evaluating, result, currentStep]);
+    }, [loading, evaluating, results, currentStep, questions.length]);
 
-    const submit = async (autoAnswer = null) => {
+    const handleNext = (autoAnswer = null) => {
         clearInterval(timerRef.current);
-        setEvaluating(true);
-        const finalAnswer = autoAnswer || answer || "No response provided";
-        try {
-            const res = await fetch(`${API_URL}/evaluate`, {
-                method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ username: user.name, answer: finalAnswer, challenge: scenario.challenge, domains, sessionId, type })
-            });
-            const data = await res.json();
-            setResult(data);
-            setSessionScores([...sessionScores, data.score]);
-        } finally { setEvaluating(false); }
-    };
+        const finalAnswer = autoAnswer || currentInput || "No response provided";
+        const updatedAnswers = [...answers, { challenge: questions[currentStep].challenge, answer: finalAnswer }];
+        setAnswers(updatedAnswers);
+        setCurrentInput("");
 
-    const autoSubmit = () => {
-        if (!result) submit();
-    };
-
-    const handleNext = () => {
-        if (currentStep < limit) {
+        if (currentStep < questions.length - 1) {
             setCurrentStep(prev => prev + 1);
-            fetchChallenge();
         } else {
-            setCurrentStep(-1);
+            submitBatch(updatedAnswers);
         }
     };
 
-    const overallAccuracy = currentStep === -1 
-        ? Math.round((sessionScores.reduce((a, b) => a + b, 0) / (limit * 10)) * 100) 
-        : 0;
+    const submitBatch = async (finalAnswers) => {
+        setEvaluating(true);
+        try {
+            const res = await fetch(`${API_URL}/evaluate-batch`, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username: user.name, answers: finalAnswers, domains, sessionId, type })
+            });
+            const data = await res.json();
+            setResults(data.results);
+        } catch (e) { alert("Evaluation sync error."); }
+        finally { setEvaluating(false); }
+    };
+
+    const overallAccuracy = useMemo(() => {
+        if (!results) return 0;
+        const total = results.reduce((acc, curr) => acc + curr.score, 0);
+        return Math.round((total / (questions.length * 10)) * 100);
+    }, [results, questions.length]);
+
+    if (loading) return <div className="text-center py-5"><Loader2 className="spinner-border text-primary mb-3" /><p className="fw-bold opacity-50">SYNCING NEURAL LINK...</p></div>;
 
     return (
         <div className="mx-auto" style={{ maxWidth: '850px' }}>
             <div className="p-5" style={glassStyle}>
                 <div className="d-flex justify-content-between mb-4 align-items-center">
                     <span className="text-primary fw-bold small tracking-widest uppercase">
-                        {currentStep === -1 ? "Protocol Summary" : `${type.toUpperCase()} - Q ${currentStep}/${limit}`}
+                        {results ? "Protocol Summary" : `${type.toUpperCase()} - Q ${currentStep + 1}/${limit}`}
                     </span>
                     <div className="d-flex align-items-center gap-3">
-                        {isTimed && currentStep !== -1 && !result && !loading && (
+                        {isTimed && !results && !evaluating && (
                             <div className="d-flex align-items-center gap-2 px-3 py-1 rounded-pill bg-danger bg-opacity-10 text-danger border border-danger border-opacity-20">
                                 <Timer size={14}/> <span className="fw-bold">{timeLeft}s</span>
                             </div>
@@ -382,58 +382,56 @@ const ActiveSession = ({ user, domains, type, limit, isTimed, onEnd }) => {
                     </div>
                 </div>
 
-                {isTimed && !loading && !result && currentStep !== -1 && (
+                {!results && !evaluating && isTimed && (
                     <div className="mb-4 w-100" style={{background: 'rgba(255,255,255,0.05)', height: '4px', borderRadius: '2px'}}>
                         <div className="timer-bar" style={{ width: `${(timeLeft/30)*100}%` }}></div>
                     </div>
                 )}
 
-                {loading && currentStep !== -1 ? (
-                    <div className="text-center py-5"><Loader2 className="spinner-border text-primary mb-3" /><p className="fw-bold opacity-50">SYNCING NEURAL LINK...</p></div>
-                ) : currentStep === -1 ? (
-                    <div className="text-center">
-                        <h6 className="text-primary fw-bold tracking-widest uppercase mb-4">Neural Evaluation Complete</h6>
-                        <h1 className="display-1 fw-black mb-3 text-gradient">{overallAccuracy}%</h1>
-                        <p className="fs-5 opacity-50 mb-5">Overall accuracy achieved across {limit} challenges.</p>
-                        <button className="btn btn-primary btn-lg px-5 rounded-pill fw-bold" onClick={onEnd}>Return to Hub</button>
-                    </div>
+                {evaluating ? (
+                    <div className="text-center py-5"><Loader2 className="spinner-border text-primary mb-3" /><p className="fw-bold opacity-50">ANALYZING RESPONSES...</p></div>
+                ) : results ? (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                        <div className="text-center mb-5">
+                            <h6 className="text-primary fw-bold tracking-widest uppercase mb-4">Neural Evaluation Complete</h6>
+                            <h1 className="display-1 fw-black mb-3 text-gradient">{overallAccuracy}%</h1>
+                            <p className="fs-5 opacity-50">Overall accuracy across {limit} challenges.</p>
+                        </div>
+                        <div className="mb-5">
+                            {results.map((res, i) => (
+                                <div key={i} className="p-4 mb-3 rounded-4" style={{background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)'}}>
+                                    <div className="d-flex justify-content-between align-items-start mb-2">
+                                        <h6 className="fw-bold text-primary mb-0">CHALLENGE {i+1}</h6>
+                                        <span className={`fw-bold ${res.score === 0 ? 'text-danger' : 'text-success'}`}>{res.score * 10}%</span>
+                                    </div>
+                                    <p className="small mb-2 fw-bold">Q: {questions[i]?.challenge.split('Question:')[1] || questions[i]?.challenge}</p>
+                                    <p className="small opacity-50 mb-0 italic">Feedback: {res.feedback}</p>
+                                </div>
+                            ))}
+                        </div>
+                        <button className="btn btn-primary btn-lg w-100 py-3 rounded-pill fw-bold" onClick={onEnd}>Return to Hub</button>
+                    </motion.div>
                 ) : (
                     <>
                         <div className="mb-5">
-                            {scenario?.challenge.split('Question:').map((text, i) => (
+                            {questions[currentStep]?.challenge.split('Question:').map((text, i) => (
                                 <div key={i} className={i === 0 ? "scenario-text" : "challenge-text h2"}>{text}{i === 0 ? "" : "?"}</div>
                             ))}
                         </div>
-                        {!result ? (
-                            <>
-                                {scenario?.options && type !== 'adaptive' ? (
-                                    <div className="row g-3 mb-5">{scenario.options.map(o => (<div className="col-md-6" key={o}><button className={`btn w-100 py-3 rounded-4 fw-bold transition-all ${answer === o ? 'btn-primary shadow-lg' : 'btn-outline-light opacity-50'}`} onClick={() => setAnswer(o)}>{o}</button></div>))}</div>
-                                ) : (
-                                    <textarea className="custom-input mb-5 challenge-text" style={{ fontSize: '1.1rem', fontWeight: '400' }} rows="4" value={answer} onChange={e => setAnswer(e.target.value)} placeholder="Type your detailed reasoning here..."/>
-                                )}
-                                <button className="btn btn-primary w-100 py-3 fw-bold rounded-4 shadow-lg" onClick={() => submit()} disabled={evaluating || (!answer && type !== 'adaptive')}>{evaluating ? <><Loader2 className="spinner-border spinner-border-sm me-2"/> ANALYZING...</> : "SUBMIT RESPONSE"}</button>
-                            </>
+                        {questions[currentStep]?.options ? (
+                            <div className="row g-3 mb-5">
+                                {questions[currentStep].options.map(o => (
+                                    <div className="col-md-6" key={o}>
+                                        <button className={`btn w-100 py-3 rounded-4 fw-bold transition-all ${currentInput === o ? 'btn-primary shadow-lg' : 'btn-outline-light opacity-50'}`} onClick={() => setCurrentInput(o)}>{o}</button>
+                                    </div>
+                                ))}
+                            </div>
                         ) : (
-                            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="text-center">
-                                {type === 'adaptive' ? (
-                                    <>
-                                        <h1 className={`display-3 fw-black mb-2 ${result.score === 0 ? 'text-danger' : 'text-primary'}`}>{result.score * 10}%</h1>
-                                        <p className="small text-primary fw-bold uppercase tracking-widest mb-4">Question Accuracy</p>
-                                    </>
-                                ) : (
-                                    <>
-                                        <h1 className={`display-4 fw-black mb-2 ${result.score > 0 ? 'text-success' : 'text-danger'}`}>
-                                            {result.score > 0 ? 'CORRECT' : 'INCORRECT'}
-                                        </h1>
-                                        <p className="small text-primary fw-bold uppercase tracking-widest mb-4">Validation Status</p>
-                                    </>
-                                )}
-                                <p className="fs-5 opacity-75 mb-5 px-md-5 italic">"{result.feedback}"</p>
-                                <button className="btn btn-primary btn-lg px-5 rounded-pill fw-bold" onClick={handleNext}>
-                                    {currentStep === limit ? "View Final Summary" : "Next Challenge"} <ArrowRight size={18} className="ms-2"/>
-                                </button>
-                            </motion.div>
+                            <textarea className="custom-input mb-5 challenge-text" style={{ fontSize: '1.1rem', fontWeight: '400' }} rows="4" value={currentInput} onChange={e => setCurrentInput(e.target.value)} placeholder="Type your detailed reasoning here..."/>
                         )}
+                        <button className="btn btn-primary w-100 py-3 fw-bold rounded-4 shadow-lg" onClick={() => handleNext()} disabled={!currentInput && type !== 'adaptive'}>
+                            {currentStep === questions.length - 1 ? "FINISH ASSESSMENT" : "NEXT CHALLENGE"}
+                        </button>
                     </>
                 )}
             </div>
@@ -443,7 +441,6 @@ const ActiveSession = ({ user, domains, type, limit, isTimed, onEnd }) => {
 
 const ReportsView = ({ user, history, loading }) => {
     const [expandedSession, setExpandedSession] = useState(null);
-    
     const sessions = useMemo(() => {
         const groups = {};
         history.forEach(item => {
@@ -458,103 +455,49 @@ const ReportsView = ({ user, history, loading }) => {
         }).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
     }, [history]);
 
-    // Helper to format date as DD-MM-YYYY
     const formatDate = (dateString) => {
         const d = new Date(dateString);
-        const day = String(d.getDate()).padStart(2, '0');
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const year = d.getFullYear();
-        return `${day}-${month}-${year}`;
+        return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
     };
 
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <div className="mb-5">
-                <h1 className="fw-black mb-1">Assessment History</h1>
-                <p className="opacity-50">Review overall session accuracy levels or drill down into specifics.</p>
-            </div>
-
-            {loading ? (
-                <div className="text-center py-5"><Loader2 className="spinner-border text-primary" /></div>
-            ) : (
-                <div className="row g-4">
-                    <div className="col-md-12">
-                        {sessions.map((s) => (
-                            <div key={s.id} className="p-4 mb-3 rounded-4" style={glassStyle}>
-                                <div className="d-flex justify-content-between align-items-center">
-                                    <div 
-                                        onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)} 
-                                        style={{cursor: 'pointer', flex: 1}}
-                                    >
-                                        <h4 className="mb-0 fw-bold">
-                                            Accuracy Level: <span className="text-primary">{s.avgScore}%</span>
-                                        </h4>
-                                        
-                                        {/* Main Session Bar (Kept below accuracy level) */}
-                                        <div className="progress mt-3 mb-2" style={{ height: '6px', background: 'rgba(255,255,255,0.1)', width: '100%', maxWidth: '350px' }}>
-                                            <motion.div 
-                                                initial={{ width: 0 }}
-                                                animate={{ width: `${s.avgScore}%` }}
-                                                transition={{ duration: 1 }}
-                                                className="progress-bar bg-primary"
-                                            />
-                                        </div>
-
-                                        <p className="small opacity-40 mb-0">
-                                            {s.domain?.toUpperCase() || "GENERAL"} • {formatDate(s.timestamp)} • {s.items.length} Challenges
-                                        </p>
-                                    </div>
-                                    <button 
-                                        className="btn btn-outline-primary rounded-pill px-4 btn-sm" 
-                                        onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)}
-                                    >
-                                        {expandedSession === s.id ? "Hide Details" : "View Details"}
-                                    </button>
+            <div className="mb-5"><h1 className="fw-black mb-1">Assessment History</h1><p className="opacity-50">Review overall session accuracy levels or drill down into specifics.</p></div>
+            {loading ? <div className="text-center py-5"><Loader2 className="spinner-border text-primary" /></div> : (
+                <div className="row g-4"><div className="col-md-12">{sessions.map((s) => (
+                    <div key={s.id} className="p-4 mb-3 rounded-4" style={glassStyle}>
+                        <div className="d-flex justify-content-between align-items-center">
+                            <div onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)} style={{cursor: 'pointer', flex: 1}}>
+                                <h4 className="mb-0 fw-bold">Accuracy Level: <span className="text-primary">{s.avgScore}%</span></h4>
+                                <div className="progress mt-3 mb-2" style={{ height: '6px', background: 'rgba(255,255,255,0.1)', width: '100%', maxWidth: '350px' }}>
+                                    <motion.div initial={{ width: 0 }} animate={{ width: `${s.avgScore}%` }} transition={{ duration: 1 }} className="progress-bar bg-primary"/>
                                 </div>
-
-                                <AnimatePresence>
-                                    {expandedSession === s.id && (
-                                        <motion.div 
-                                            initial={{ height: 0, opacity: 0 }} 
-                                            animate={{ height: 'auto', opacity: 1 }} 
-                                            exit={{ height: 0, opacity: 0 }} 
-                                            className="overflow-hidden mt-4 pt-4 border-top border-white border-opacity-10"
-                                        >
-                                            <div className="row g-3">
-                                                {s.items.map((item, idx) => {
-                                                    const itemPercent = item.score * 10;
-                                                    return (
-                                                        <div key={idx} className="col-12">
-                                                            <div className="p-3 rounded-3" style={{background: 'rgba(255,255,255,0.02)'}}>
-                                                                <div className="d-flex justify-content-between align-items-center mb-2">
-                                                                    <span className="text-primary small fw-bold">CHALLENGE {idx + 1}</span>
-                                                                    <span className={`fw-bold ${itemPercent === 0 ? 'text-danger' : 'text-primary'}`}>
-                                                                        {itemPercent}%
-                                                                    </span>
-                                                                </div>
-                                                                
-                                                                {/* Challenge Level Bars (Kept) */}
-                                                                <div className="progress mb-3" style={{ height: '4px', background: 'rgba(255,255,255,0.05)' }}>
-                                                                    <div 
-                                                                        className={`progress-bar ${itemPercent === 0 ? 'bg-danger' : 'bg-primary'}`} 
-                                                                        style={{ width: `${itemPercent}%` }}
-                                                                    />
-                                                                </div>
-
-                                                                <p className="small mb-2 fw-bold">Q: {item.challenge}</p>
-                                                                <p className="small opacity-50 mb-0 italic">Feedback: {item.feedback}</p>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
+                                <p className="small opacity-40 mb-0">{s.domain?.toUpperCase() || "GENERAL"} • {formatDate(s.timestamp)} • {s.items.length} Challenges</p>
                             </div>
-                        ))}
+                            <button className="btn btn-outline-primary rounded-pill px-4 btn-sm" onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)}>{expandedSession === s.id ? "Hide Details" : "View Details"}</button>
+                        </div>
+                        <AnimatePresence>{expandedSession === s.id && (
+                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden mt-4 pt-4 border-top border-white border-opacity-10">
+                                <div className="row g-3">{s.items.map((item, idx) => {
+                                    const itemPercent = item.score * 10;
+                                    return (
+                                        <div key={idx} className="col-12"><div className="p-3 rounded-3" style={{background: 'rgba(255,255,255,0.02)'}}>
+                                            <div className="d-flex justify-content-between align-items-center mb-2">
+                                                <span className="text-primary small fw-bold">CHALLENGE {idx + 1}</span>
+                                                <span className={`fw-bold ${itemPercent === 0 ? 'text-danger' : 'text-primary'}`}>{itemPercent}%</span>
+                                            </div>
+                                            <div className="progress mb-3" style={{ height: '4px', background: 'rgba(255,255,255,0.05)' }}>
+                                                <div className={`progress-bar ${itemPercent === 0 ? 'bg-danger' : 'bg-primary'}`} style={{ width: `${itemPercent}%` }}/>
+                                            </div>
+                                            <p className="small mb-2 fw-bold">Q: {item.challenge}</p>
+                                            <p className="small opacity-50 mb-0 italic">Feedback: {item.feedback}</p>
+                                        </div></div>
+                                    );
+                                })}</div>
+                            </motion.div>
+                        )}</AnimatePresence>
                     </div>
-                </div>
+                ))}</div></div>
             )}
         </motion.div>
     );
