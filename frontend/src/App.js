@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     LayoutDashboard, BookOpen, BarChart3, LogOut, Brain, Zap, 
-    Loader2, X, Plus, ArrowRight, Target, Globe,TrendingUp, 
-    Activity, ShieldCheck, Lock, Mail, User as UserIcon, Timer, TimerOff,Calendar
+    Loader2, X, Plus, ArrowRight, Target, Globe, TrendingUp, 
+    Activity, ShieldCheck, Lock, Mail, User as UserIcon, Timer, TimerOff, Calendar
 } from 'lucide-react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
@@ -90,6 +90,8 @@ const App = () => {
                 .challenge-text { font-family: 'Inter', sans-serif; letter-spacing: -0.02em; line-height: 1.3; font-weight: 700; color: #f8fafc; }
                 .scenario-text { color: #64748b; font-size: 1.1rem; margin-bottom: 0.5rem; }
                 .timer-bar { height: 4px; background: #3b82f6; transition: width 1s linear; border-radius: 2px; }
+                .no-spinners::-webkit-outer-spin-button, .no-spinners::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+                .no-spinners { -moz-appearance: textfield; }
             `}</style>
         </div>
     );
@@ -156,7 +158,6 @@ const AuthPage = ({ onAuth }) => {
 };
 
 const DashboardView = ({ user, setTab, history }) => {
-    // Custom style for the gradient text effect
     const gradientTextStyle = {
         background: 'linear-gradient(135deg, #60a5fa 0%, #a855f7 50%, #ec4899 100%)',
         WebkitBackgroundClip: 'text',
@@ -167,18 +168,20 @@ const DashboardView = ({ user, setTab, history }) => {
 
     const stats = useMemo(() => {
         const totalQs = history.length;
-        const uniqueSessions = new Set(history.map(h => h.sessionId)).size;
-        const totalPossibleScore = totalQs * 10;
         const totalActualScore = history.reduce((acc, curr) => acc + curr.score, 0);
-        const avgAccuracy = totalPossibleScore > 0 ? Math.round((totalActualScore / totalPossibleScore) * 100) : 0;
+        const avgAccuracy = totalQs > 0 ? Math.round((totalActualScore / (totalQs * 10)) * 100) : 0;
+        const uniqueSessions = new Set(history.map(h => h.sessionId)).size;
         
         let rating = "C";
-        if (avgAccuracy >= 90) rating = "S";
-        else if (avgAccuracy >= 80) rating = "A+";
-        else if (avgAccuracy >= 70) rating = "A";
-        else if (avgAccuracy >= 50) rating = "B";
+        let level = "Beginner";
         
-        return { accuracy: `${avgAccuracy}%`, syncs: uniqueSessions, rating };
+        if (avgAccuracy >= 90) { rating = "S"; level = "Elite Expert"; }
+        else if (avgAccuracy >= 80) { rating = "A+"; level = "Advanced"; }
+        else if (avgAccuracy >= 70) { rating = "A"; level = "Skilled"; }
+        else if (avgAccuracy >= 50) { rating = "B"; level = "Intermediate"; }
+        else { rating = "C"; level = "Novice"; }
+        
+        return { accuracy: `${avgAccuracy}%`, syncs: uniqueSessions, rating, level };
     }, [history]);
 
     const skillMatrix = useMemo(() => {
@@ -192,7 +195,7 @@ const DashboardView = ({ user, setTab, history }) => {
         return Object.keys(domains).map(name => ({
             name,
             percent: Math.round((domains[name].total / (domains[name].count * 10)) * 100)
-        })).slice(0, 3);
+        }));
     }, [history]);
 
     return (
@@ -200,14 +203,13 @@ const DashboardView = ({ user, setTab, history }) => {
             <div className="mb-5 d-flex justify-content-between align-items-end">
                 <div>
                     <h6 className="text-primary fw-bold tracking-widest mb-2 uppercase" style={{ fontSize: '0.75rem', marginTop:"-80px" }}>Status: Online</h6>
-                    {/* Reduced font size from display-4 to h2 and added gradient */}
                     <h1 className="fw-black mb-0">
                         Welcome, <span style={gradientTextStyle}>{user?.name}</span>
                     </h1>
                 </div>
                 <div className="p-3 px-4 rounded-4" style={glassStyle}>
                     <span className="small opacity-50 d-block">Intelligence Level</span>
-                    <span className="h4 fw-black text-gradient">{user?.level}</span>
+                    <span className="h4 fw-black text-gradient">{stats.level}</span>
                 </div>
             </div>
 
@@ -229,32 +231,37 @@ const DashboardView = ({ user, setTab, history }) => {
 
             <div className="row g-4">
                 <div className="col-md-8">
-                    <div className="p-5 rounded-5 h-100" style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.15), transparent)', border: '1px solid rgba(59,130,246,0.2)' }}>
-                        {/* Reduced from h2 to h4 */}
-                        <h4 className="fw-black mb-3">Initialize Neural Assessment</h4>
-                        {/* Reduced from fs-5 to small/opacity */}
-                        <p className="opacity-60 mb-4" style={{ fontSize: '1rem', lineHeight: '1.6' }}>
-                            Ready to assess your Skills? Our AI core is synchronized and waiting for your domain parameters.
+                    <div className="p-5 rounded-5" style={{ height: '320px', background: 'linear-gradient(135deg, rgba(59,130,246,0.15), transparent)', border: '1px solid rgba(59,130,246,0.2)' }}>
+                        <h2 className="fw-black mb-3">Initialize Neural Assessment</h2>
+                        <p className="opacity-60" style={{ lineHeight: '1.8', fontSize: '0.95rem' }}>
+                            Ready to assess your Skills? Our AI core is synchronized and waiting for your domain parameters. Select the assesment type and timer for efficient utilization of the Intellignet AI-Powered Assesment System.
                         </p>
-                        <button className="btn btn-primary btn-lg rounded-pill px-5 fw-bold" style={{ fontSize: '0.9rem' }} onClick={() => setTab('assessments')}>
-                            START ASSESSMENT <ArrowRight size={18} className="ms-2"/>
+                        <button className="btn btn-primary btn-lg rounded-pill px-5 fw-bold mt-4" onClick={() => setTab('assessments')}>
+                            Start Assessment <ArrowRight size={18} className="ms-2"/>
                         </button>
                     </div>
                 </div>
                 <div className="col-md-4">
-                    <div className="p-4 h-100" style={glassStyle}>
-                        <h6 className="fw-bold mb-4 opacity-50">SKILL MATRIX</h6>
-                        {(skillMatrix.length > 0 ? skillMatrix : [{name: 'Waiting for Data', percent: 0}]).map(skill => (
-                            <div className="mb-4" key={skill.name}>
-                                <div className="d-flex justify-content-between mb-2 small fw-bold">
-                                    <span>{skill.name}</span>
-                                    <span className="text-primary">{skill.percent}%</span>
+                    <div className="p-4 rounded-5" style={{ ...glassStyle, height: '320px' }}>
+                        <h6 className="fw-bold mb-3 opacity-50">SKILL MATRIX</h6>
+                        <div style={{ 
+                            maxHeight: '210px', 
+                            overflowY: 'auto', 
+                            scrollbarWidth: 'none', 
+                            msOverflowStyle: 'none' 
+                        }}>
+                            {(skillMatrix.length > 0 ? skillMatrix : [{name: 'Waiting for Data', percent: 0}]).map((skill, idx) => (
+                                <div className="mb-4" key={idx}>
+                                    <div className="d-flex justify-content-between mb-2 small fw-bold">
+                                        <span>{skill.name}</span>
+                                        <span className="text-primary">{skill.percent}%</span>
+                                    </div>
+                                    <div className="progress" style={{ height: '4px', background: 'rgba(255,255,255,0.05)' }}>
+                                        <div className="progress-bar bg-primary" style={{ width: `${skill.percent}%` }}></div>
+                                    </div>
                                 </div>
-                                <div className="progress" style={{ height: '4px', background: 'rgba(255,255,255,0.05)' }}>
-                                    <div className="progress-bar bg-primary" style={{ width: `${skill.percent}%` }}></div>
-                                </div>
-                            </div>
-                        ))}
+                            ))}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -267,9 +274,20 @@ const AssessmentCenter = ({ user, refreshHistory }) => {
     const [input, setInput] = useState("");
     const [session, setSession] = useState(null);
     const [qCount, setQCount] = useState(3);
+    const [customCount, setCustomCount] = useState("");
     const [isTimed, setIsTimed] = useState(false);
 
-    if (session) return <ActiveSession user={user} domains={domains} type={session} limit={qCount} isTimed={isTimed} onEnd={() => { setSession(null); refreshHistory(); }} />;
+    const handleStart = (type) => {
+        if (type !== 'general' && domains.length === 0) {
+            alert("Please select at least one domain for this assessment type.");
+            return;
+        }
+        setSession(type);
+    };
+
+    const finalCount = customCount !== "" ? parseInt(customCount) : qCount;
+
+    if (session) return <ActiveSession user={user} domains={domains} type={session} limit={finalCount} isTimed={isTimed} onEnd={() => { setSession(null); refreshHistory(); }} />;
 
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -287,10 +305,24 @@ const AssessmentCenter = ({ user, refreshHistory }) => {
                     <div className="col-md-4">
                         <h6 className="text-primary fw-bold mb-3 uppercase tracking-widest">Question Quantity</h6>
                         <div className="d-flex gap-2">
-                            <select className="custom-input" value={qCount} style={{width: '60%'}} onChange={(e) => setQCount(parseInt(e.target.value))}>
+                            <select 
+                                className={`custom-input ${customCount !== "" ? 'opacity-25' : ''}`} 
+                                value={qCount} 
+                                style={{width: '60%'}} 
+                                disabled={customCount !== ""}
+                                onChange={(e) => setQCount(parseInt(e.target.value))}
+                            >
                                 {[1, 2, 3, 5, 10, 15, 20].map(n => <option key={n} value={n} style={{background: '#020617'}}>{n} Qs</option>)}
                             </select>
-                            <input className="custom-input" placeholder="Custom" style={{width: '40%'}} onChange={(e) => setQCount(parseInt(e.target.value) || 1)} />
+                            <input 
+                                type="text"
+                                inputMode="numeric"
+                                className="custom-input no-spinners" 
+                                placeholder="Custom" 
+                                style={{width: '40%'}} 
+                                value={customCount}
+                                onChange={(e) => setCustomCount(e.target.value.replace(/\D/g, ""))} 
+                            />
                         </div>
                     </div>
                     <div className="col-md-3">
@@ -309,7 +341,7 @@ const AssessmentCenter = ({ user, refreshHistory }) => {
                     { id: 'general', title: 'General Knowledge', desc: 'Random high-level trivia.', icon: <Globe/> }
                 ].map(p => (
                     <div className="col-md-4" key={p.id}>
-                        <div className="protocol-card p-5 h-100" style={glassStyle} onClick={() => setSession(p.id)}>
+                        <div className="protocol-card p-5 h-100" style={glassStyle} onClick={() => handleStart(p.id)}>
                             <div className="text-primary mb-4">{p.icon}</div>
                             <h4 className="fw-bold mb-3">{p.title}</h4>
                             <p className="small opacity-50 mb-4">{p.desc}</p>
@@ -321,8 +353,6 @@ const AssessmentCenter = ({ user, refreshHistory }) => {
         </motion.div>
     );
 };
-
-// ... (Keep imports and styles exactly as they are)
 
 const ActiveSession = ({ user, domains, type, limit, isTimed, onEnd }) => {
     const [questions, setQuestions] = useState([]);
@@ -383,14 +413,13 @@ const ActiveSession = ({ user, domains, type, limit, isTimed, onEnd }) => {
 
         if (currentStep < questions.length - 1) {
             setCurrentStep(prev => prev + 1);
-            setTimeLeft(30); // Reset timer for the next question only here
+            setTimeLeft(30);
         } else {
             clearInterval(timerRef.current);
             submitBatch(updatedAnswers);
         }
     }, [answers, questions, currentStep, currentInput, submitBatch]);
 
-    // Timer Interval Logic
     useEffect(() => {
         if (isTimed && !loading && !evaluating && !results && questions.length > 0) {
             timerRef.current = setInterval(() => {
@@ -404,8 +433,7 @@ const ActiveSession = ({ user, domains, type, limit, isTimed, onEnd }) => {
             }, 1000);
         }
         return () => clearInterval(timerRef.current);
-    }, [loading, evaluating, results, questions.length, isTimed, handleNext]); 
-    // handleNext is stabilized by useCallback, currentStep is handled inside handleNext
+    }, [loading, evaluating, results, questions.length, isTimed, handleNext]);
 
     const overallAccuracy = useMemo(() => {
         if (!results) return 0;
@@ -460,7 +488,9 @@ const ActiveSession = ({ user, domains, type, limit, isTimed, onEnd }) => {
                                 <div key={i} className="p-4 mb-3 rounded-4" style={{background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)'}}>
                                     <div className="d-flex justify-content-between align-items-start mb-2">
                                         <h6 className="fw-bold text-primary mb-0 uppercase small">Challenge {i+1}</h6>
-                                        <span className={`fw-bold ${res.score < 5 ? 'text-danger' : 'text-success'}`}>{res.score * 10}%</span>
+                                        <span className={`fw-bold ${(type === 'multi' || type === 'general') ? (res.score >= 8 ? 'text-success' : 'text-danger') : (res.score < 5 ? 'text-danger' : 'text-success')}`}>
+                                            {(type === 'multi' || type === 'general') ? (res.score >= 8 ? 'CORRECT' : 'INCORRECT') : `${res.score * 10}%`}
+                                        </span>
                                     </div>
                                     <p className="small mb-2 fw-bold opacity-90">{questions[i]?.challenge}</p>
                                     <div className="p-2 rounded-2" style={{background: 'rgba(0,0,0,0.2)'}}>
@@ -474,11 +504,10 @@ const ActiveSession = ({ user, domains, type, limit, isTimed, onEnd }) => {
                 ) : (
                     <>
                         <div className="mb-5">
-                            {/* Improved split logic with fallback */}
                             {questions[currentStep]?.challenge && questions[currentStep].challenge.includes('Question:') ? (
                                 questions[currentStep].challenge.split('Question:').map((text, i) => (
                                     <div key={i} className={i === 0 ? "scenario-text mb-2" : "challenge-text h2"}>
-                                        {text}{i !== 0 && questions[currentStep].challenge.endsWith('?') ? '' : ''}
+                                        {text}
                                     </div>
                                 ))
                             ) : (
@@ -527,7 +556,6 @@ const ActiveSession = ({ user, domains, type, limit, isTimed, onEnd }) => {
 const ReportsView = ({ user, history, loading }) => {
     const [expandedSession, setExpandedSession] = useState(null);
 
-    // Style for the Date & Challenges Highlight Box
     const metaBoxStyle = {
         background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%)',
         border: '1px solid rgba(139, 92, 246, 0.3)',
@@ -538,7 +566,7 @@ const ReportsView = ({ user, history, loading }) => {
         const groups = {};
         history.forEach(item => {
             const sid = item.sessionId || 'legacy';
-            if (!groups[sid]) groups[sid] = { id: sid, domain: item.domain, timestamp: item.timestamp, items: [], avgScore: 0 };
+            if (!groups[sid]) groups[sid] = { id: sid, domain: item.domain, timestamp: item.timestamp, type: item.type, items: [], avgScore: 0 };
             groups[sid].items.push(item);
         });
         return Object.values(groups).map(s => {
@@ -568,11 +596,7 @@ const ReportsView = ({ user, history, loading }) => {
                         {sessions.map((s) => (
                             <div key={s.id} className="p-4 mb-3 rounded-4" style={glassStyle}>
                                 <div className="d-flex justify-content-between align-items-center mb-4">
-                                    {/* Left: Domain & Accuracy */}
-                                    <div 
-                                        onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)} 
-                                        style={{ cursor: 'pointer' }}
-                                    >
+                                    <div onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)} style={{ cursor: 'pointer' }}>
                                         <h2 className="fw-black mb-0 tracking-tight text-uppercase" style={{ fontSize: '1.6rem' }}>
                                             {s.domain || "General"}
                                         </h2>
@@ -581,7 +605,6 @@ const ReportsView = ({ user, history, loading }) => {
                                         </div>
                                     </div>
 
-                                    {/* Right: Date & Challenges in a Classy Gradient Box */}
                                     <div className="px-3 py-2 rounded-pill d-flex align-items-center gap-3" style={metaBoxStyle}>
                                         <div className="d-flex align-items-center gap-2">
                                             <Calendar size={14} className="text-primary opacity-75" />
@@ -595,46 +618,30 @@ const ReportsView = ({ user, history, loading }) => {
                                     </div>
                                 </div>
 
-                                {/* Progress & Action Area */}
                                 <div className="d-flex align-items-center gap-4">
                                     <div className="progress flex-grow-1" style={{ height: '4px', background: 'rgba(255,255,255,0.05)' }}>
-                                        <motion.div 
-                                            initial={{ width: 0 }} 
-                                            animate={{ width: `${s.avgScore}%` }} 
-                                            className="progress-bar bg-primary shadow-sm"
-                                        />
+                                        <motion.div initial={{ width: 0 }} animate={{ width: `${s.avgScore}%` }} className="progress-bar bg-primary shadow-sm" />
                                     </div>
-                                    <button 
-                                        className="btn btn-primary btn-sm rounded-pill px-4 fw-bold" 
-                                        style={{ fontSize: '0.7rem', letterSpacing: '1px' }}
-                                        onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)}
-                                    >
+                                    <button className="btn btn-primary btn-sm rounded-pill px-4 fw-bold" style={{ fontSize: '0.7rem', letterSpacing: '1px' }} onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)}>
                                         {expandedSession === s.id ? "HIDE ANALYTICS" : "VIEW ANALYTICS"}
                                     </button>
                                 </div>
 
                                 <AnimatePresence>
                                     {expandedSession === s.id && (
-                                        <motion.div 
-                                            initial={{ height: 0, opacity: 0 }} 
-                                            animate={{ height: 'auto', opacity: 1 }} 
-                                            exit={{ height: 0, opacity: 0 }} 
-                                            className="overflow-hidden mt-4 pt-4 border-top border-white border-opacity-10"
-                                        >
+                                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden mt-4 pt-4 border-top border-white border-opacity-10">
                                             <div className="row g-3">
                                                 {s.items.map((item, idx) => {
                                                     const itemPercent = item.score * 10;
+                                                    const isObjective = s.type === 'multi' || s.type === 'general';
                                                     return (
                                                         <div key={idx} className="col-12">
-                                                            {/* Highlighted Challenge Card */}
-                                                            <div className="p-3 rounded-4" style={{ 
-                                                                background: 'rgba(255,255,255,0.03)', 
-                                                                borderLeft: `4px solid ${itemPercent === 0 ? '#ef4444' : '#3b82f6'}`,
-                                                                boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
-                                                            }}>
+                                                            <div className="p-3 rounded-4" style={{ background: 'rgba(255,255,255,0.03)', borderLeft: `4px solid ${item.score >= 8 ? '#10b981' : (item.score < 5 ? '#ef4444' : '#3b82f6')}` }}>
                                                                 <div className="d-flex justify-content-between align-items-center mb-2">
                                                                     <span className="small fw-black opacity-40 uppercase tracking-widest" style={{ fontSize: '0.6rem' }}>Challenge {idx + 1}</span>
-                                                                    <span className={`fw-black ${itemPercent === 0 ? 'text-danger' : 'text-primary'}`}>{itemPercent}%</span>
+                                                                    <span className={`fw-black ${item.score >= 8 ? 'text-success' : (item.score < 5 ? 'text-danger' : 'text-primary')}`}>
+                                                                        {isObjective ? (item.score >= 8 ? 'CORRECT' : 'INCORRECT') : `${itemPercent}%`}
+                                                                    </span>
                                                                 </div>
                                                                 <p className="fw-bold mb-2" style={{ fontSize: '0.9rem' }}>{item.challenge}</p>
                                                                 <div className="p-2 rounded-3" style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.05)' }}>
