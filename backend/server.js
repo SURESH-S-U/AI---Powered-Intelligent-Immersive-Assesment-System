@@ -14,14 +14,19 @@ mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log("✅ MongoDB Connected Successfully"))
     .catch((err) => console.error("❌ MongoDB Connection Error:", err));
 
-const User = mongoose.model("User", new mongoose.Schema({
+// --- SCHEMAS ---
+
+const UserSchema = new mongoose.Schema({
     username: String, 
     email: { type: String, unique: true }, 
     password: { type: String }, 
     level: { type: String, default: "Beginner" }
-}));
+});
+const User = mongoose.model("User", UserSchema);
 
-const Assessment = mongoose.model("Assessment", new mongoose.Schema({
+const AssessmentSchema = new mongoose.Schema({
+    // Fixed: userId is required to link all data to the specific user profile
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     username: String, 
     domain: String, 
     score: Number, 
@@ -32,7 +37,10 @@ const Assessment = mongoose.model("Assessment", new mongoose.Schema({
     type: String, 
     difficulty: { type: String, default: "Beginner" },
     timestamp: { type: Date, default: Date.now }
-}));
+});
+const Assessment = mongoose.model("Assessment", AssessmentSchema);
+
+// --- AI UTILS ---
 
 const callGitHubAI = async (prompt) => {
     try {
@@ -44,18 +52,16 @@ const callGitHubAI = async (prompt) => {
             },
             body: JSON.stringify({
                 messages: [
-                    { role: "system", content: "You are an advanced AI assessment engine. You must ONLY output valid JSON. Ensure 'challenge' is ALWAYS a string." },
+                    { role: "system", content: "You are an advanced AI assessment engine. You must ONLY output valid JSON." },
                     { role: "user", content: prompt }
                 ],
                 model: "gpt-4o-mini",
                 temperature: 0.7 
             })
         });
-
         const result = await response.json();
         return result.choices[0].message.content;
     } catch (error) {
-        console.error("AI Fetch Failure:", error.message);
         throw error;
     }
 };
@@ -67,10 +73,13 @@ const cleanJSON = (text) => {
     } catch (e) { return null; }
 };
 
+// --- ROUTES ---
+
 app.post("/register", async (req, res) => {
     try {
         const hashedPassword = await bcrypt.hash(req.body.password, 10);
-        await new User({ ...req.body, password: hashedPassword }).save();
+        const newUser = new User({ ...req.body, password: hashedPassword });
+        await newUser.save();
         res.status(201).json({ success: true });
     } catch (e) { res.status(400).json({ error: "Email exists" }); }
 });
@@ -79,8 +88,12 @@ app.post("/login", async (req, res) => {
     try {
         const user = await User.findOne({ email: req.body.email });
         if (user && await bcrypt.compare(req.body.password, user.password)) {
-            const token = jwt.sign({ id: user._id }, "NEXA_SECRET");
-            res.json({ token, user: { name: user.username, level: user.level } });
+            const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET || "NEXA_SECRET");
+            // Fixed: Consistently returning 'id' so frontend can track the folder
+            res.json({ 
+                token, 
+                user: { id: user._id, name: user.username, level: user.level } 
+            });
         } else { res.status(401).json({ error: "Invalid Credentials" }); }
     } catch (e) { res.status(500).json({ error: "Server Error" }); }
 });
@@ -88,46 +101,27 @@ app.post("/login", async (req, res) => {
 app.post("/generate-assessment", async (req, res) => {
     const { type, domains, limit, difficulty } = req.body;
     const isMCQ = (type === 'multi' || type === 'general');
-    
     let topicDescription = domains.join(", ");
-    if (type === 'general') topicDescription = "random high-level trivia, science, and history";
-
-    const count = limit || 3;
-    const seed = Date.now(); 
 
     try {
-        let prompt = `Generate ${count} ${isMCQ ? 'Multiple Choice' : 'Scenario-based'} questions. 
-        Topic: ${topicDescription}. 
-        Difficulty Level: ${difficulty}. 
-        Seed: ${seed}.
-        
-        RULES:
-        1. Keep questions VERY SHORT (max 15-20 words) so they can be read quickly within a 30s timer.
-        2. If type is 'general' or 'multi', you MUST provide exactly 4 distinct options.
-        3. Match the question complexity strictly to the '${difficulty}' level.
-        4. Output format: JSON ONLY.
-        
-        JSON Format: 
-        {"questions": [{"challenge": "${!isMCQ ? 'Scenario: [text] Question: [text]' : '[Question text]'} ", "options": ${isMCQ ? '["A", "B", "C", "D"]' : 'null'}}]}`;
-
+        let prompt = `Generate ${limit || 3} ${isMCQ ? 'MCQ' : 'Scenario'} questions for ${topicDescription} (${difficulty}). JSON format: {"questions": [{"challenge": "text", "options": ["A","B","C","D"]}]}`;
         const aiResponse = await callGitHubAI(prompt);
-        const data = cleanJSON(aiResponse);
-        res.json(data);
+        res.json(cleanJSON(aiResponse));
     } catch (e) { res.status(500).json({ error: "AI Generation Error" }); }
 });
 
 app.post("/evaluate-batch", async (req, res) => {
-    const { username, answers, domains, sessionId, type, difficulty } = req.body;
+    // Correctly extracting userId from the body sent by frontend
+    const { userId, username, answers, domains, sessionId, type, difficulty } = req.body;
+    
     try {
-        const evalPrompt = `Evaluate these answers for a ${type} assessment at ${difficulty} level.
-        Data: ${JSON.stringify(answers)}.
-        JSON Format: {"results": [{"score": 0-10, "feedback": "Brief description"}]}`;
-
+        const evalPrompt = `Evaluate these answers: ${JSON.stringify(answers)}. JSON Format: {"results": [{"score": 0-10, "feedback": "string"}]}`;
         const aiResponse = await callGitHubAI(evalPrompt);
         const data = cleanJSON(aiResponse);
 
         const savePromises = data.results.map((resItem, idx) => {
             return new Assessment({
+                userId, // Linking to the unique MongoDB ID
                 username, 
                 domain: (type === 'general' ? "General Knowledge" : domains.join(", ")), 
                 challenge: answers[idx].challenge, 
@@ -139,14 +133,16 @@ app.post("/evaluate-batch", async (req, res) => {
         });
         await Promise.all(savePromises);
         res.json(data);
-    } catch (e) { res.status(500).json({ error: "Eval Error" }); }
+    } catch (e) { res.status(500).json({ error: "Evaluation processing failed" }); }
 });
 
-app.get("/history/:username", async (req, res) => {
+// GET History for a specific "User Folder" using their unique ID
+app.get("/history/:userId", async (req, res) => {
     try {
-        const results = await Assessment.find({ username: req.params.username }).sort({ timestamp: -1 });
+        // Querying by userId (the ObjectId) instead of the plain string name
+        const results = await Assessment.find({ userId: req.params.userId }).sort({ timestamp: -1 });
         res.json(results);
-    } catch (e) { res.status(500).json({ error: "History Error" }); }
+    } catch (e) { res.status(500).json({ error: "History retrieval failed" }); }
 });
 
 const PORT = 5000;
