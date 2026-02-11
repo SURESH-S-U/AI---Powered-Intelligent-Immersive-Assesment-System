@@ -8,11 +8,11 @@ const jwt = require("jsonwebtoken");
 dotenv.config();
 const app = express();
 
-// Frontend
+// Frontend Connection URL
 app.use(
   cors({
     origin: [
-      process.env.FRONTEND_URL,
+      "https://ai-powered-intelligent-immersive-as.vercel.app", // Hardcode your Vercel URL to be safe
       "http://localhost:3000"
     ],
     methods: ["GET", "POST", "PUT", "DELETE"],

@@ -11,7 +11,7 @@ const glassStyle = { background: 'rgba(255, 255, 255, 0.02)', backdropFilter: 'b
 
 
 // Backend API URL
-const API_URL = process.env.Backend_API_URL || "http://localhost:5000";
+const API_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
 
 
 // --- COMPONENT: DIFFICULTY CIRCLE (LeetCode Style) ---
