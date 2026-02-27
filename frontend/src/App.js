@@ -561,7 +561,7 @@ const ReportsView = ({ user, history, loading }) => {
                                     <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center mb-4 gap-3">
                                         <div onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)} style={{ cursor: 'pointer' }}>
                                             <h2 className="fw-black mb-0 tracking-tight text-uppercase" style={{ fontSize: '1.2rem' }}>{s.domain || "General"}</h2>
-                                            <div className="fw-bold text-primary" style={{ fontSize: '1rem' }}>{s.avgScore}% <span className="small opacity-50 fw-normal ms-1">Accuracy</span></div>
+                                            <div className="fw-bold mt-3 text-primary" style={{ fontSize: '1rem', marginBottom:"-30px" }}>{s.avgScore}% <span className="small fw-normal ms-1">Accuracy</span></div>
                                         </div>
                                         <div className="px-3 py-2 rounded-4 d-flex flex-wrap align-items-center gap-2 gap-md-3" style={metaBoxStyle}>
                                             <div className="d-flex align-items-center gap-2"><Calendar size={14} className="text-primary opacity-75" /><span className="small fw-bold opacity-80">{formatDate(s.timestamp)}</span></div>
