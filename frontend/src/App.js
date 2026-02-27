@@ -296,7 +296,7 @@ const DashboardView = ({ user, setTab, history }) => {
             <div className="row g-4">
                 <div className="col-lg-8"><div className="p-4 p-md-5 rounded-5 h-100" style={{ minHeight: '300px', background: 'linear-gradient(135deg, rgba(59,130,246,0.15), transparent)', border: '1px solid rgba(59,130,246,0.2)' }}>
                     <h2 className="fw-black mb-3">Initialize Neural Assessment</h2>
-                    <p className="opacity-60 mb-1" style={{ lineHeight: '1.8', fontSize: '0.95rem' }}>Ready to assess your Skills? Our AI core is synchronized and waiting for parameters. Select Your domain and set difficulty and timer for efficient use of our Intelligent AI-Powered Assessment System.</p>
+                    <p className="opacity-60 mb-1" style={{ lineHeight: '1.8', fontSize: '0.95rem' }}>Ready to test your skills? Our AI system is calibrated and awaiting your input. Choose your domain, set the difficulty level and timer, and begin your smart AI-powered assessment experience today with confidence.</p>
                     <button className="btn btn-primary btn-lg rounded-pill px-5 fw-bold mt-4 mt-md-5 w-100 w-md-auto" onClick={() => setTab('assessments')}>Start Assessment <ArrowRight size={18} className="ms-2"/></button>
                 </div></div>
                 <div className="col-lg-4"><div className="p-4 rounded-5" style={{ ...glassStyle, minHeight: '350px' }}>
