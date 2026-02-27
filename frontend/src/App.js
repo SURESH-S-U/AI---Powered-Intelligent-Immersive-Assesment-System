@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+// --- ADDED GOOGLE IMPORTS ---
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google'; 
 import { 
     LayoutDashboard, BookOpen, BarChart3, LogOut, Brain, Zap, 
     Loader2, X, Plus, ArrowRight, Target, Globe, TrendingUp, 
@@ -9,32 +11,23 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 
 const glassStyle = { background: 'rgba(255, 255, 255, 0.02)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '24px' };
 
-
-// Backend API URL
 const API_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
 
-
-// --- COMPONENT: DIFFICULTY CIRCLE (LeetCode Style) ---
 const DifficultyCircle = ({ stats }) => {
     const radius = 35;
     const circum = 2 * Math.PI * radius;
     const total = stats.total || 1;
-    
     const begStroke = (stats.Beginner / total) * circum;
     const intStroke = (stats.Intermediate / total) * circum;
     const advStroke = (stats.Advanced / total) * circum;
-
     return (
         <div className="d-flex align-items-center gap-3 difficulty-container">
             <div style={{ position: 'relative', width: '90px', height: '90px', flexShrink: 0 }}>
                 <svg viewBox="0 0 100 100" style={{ transform: 'rotate(-90deg)' }}>
                     <circle cx="50" cy="50" r={radius} fill="transparent" stroke="rgba(255,255,255,0.05)" strokeWidth="9" />
-                    <circle cx="50" cy="50" r={radius} fill="transparent" stroke="#3b82f6" strokeWidth="9" 
-                        strokeDasharray={`${begStroke} ${circum}`} strokeLinecap="round" />
-                    <circle cx="50" cy="50" r={radius} fill="transparent" stroke="#a855f7" strokeWidth="9" 
-                        strokeDasharray={`${intStroke} ${circum}`} strokeDashoffset={-begStroke} strokeLinecap="round" />
-                    <circle cx="50" cy="50" r={radius} fill="transparent" stroke="#ec4899" strokeWidth="9" 
-                        strokeDasharray={`${advStroke} ${circum}`} strokeDashoffset={-(begStroke + intStroke)} strokeLinecap="round" />
+                    <circle cx="50" cy="50" r={radius} fill="transparent" stroke="#3b82f6" strokeWidth="9" strokeDasharray={`${begStroke} ${circum}`} strokeLinecap="round" />
+                    <circle cx="50" cy="50" r={radius} fill="transparent" stroke="#a855f7" strokeWidth="9" strokeDasharray={`${intStroke} ${circum}`} strokeDashoffset={-begStroke} strokeLinecap="round" />
+                    <circle cx="50" cy="50" r={radius} fill="transparent" stroke="#ec4899" strokeWidth="9" strokeDasharray={`${advStroke} ${circum}`} strokeDashoffset={-(begStroke + intStroke)} strokeLinecap="round" />
                 </svg>
                 <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }} className="text-center">
                     <div className="fw-black" style={{fontSize: '1.2rem', lineHeight: '1'}}>{stats.total}</div>
@@ -68,15 +61,15 @@ const App = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     const fetchHistory = useCallback(async () => {
-        if (!user?.id) return; // Changed from user.name to user.id
+        if (!user?.id) return;
         setLoadingHistory(true);
         try {
-            const r = await fetch(`${API_URL}/history/${user.id}`); // Changed endpoint
+            const r = await fetch(`${API_URL}/history/${user.id}`);
             const data = await r.json();
             setHistory(Array.isArray(data) ? data : []);
         } catch (e) { console.error("History fetch failed"); }
         finally { setLoadingHistory(false); }
-    }, [user?.id]); // Depend on user.id
+    }, [user?.id]);
 
     useEffect(() => {
         if (token) fetchHistory();
@@ -88,7 +81,12 @@ const App = () => {
         setToken(data.token); setUser(data.user);
     };
 
-    if (!token) return <AuthPage onAuth={onAuth} />;
+    // --- WRAPPED AUTHPAGE WITH GOOGLE PROVIDER ---
+    if (!token) return (
+        <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID}>
+            <AuthPage onAuth={onAuth} />
+        </GoogleOAuthProvider>
+    );
 
     const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
@@ -172,6 +170,22 @@ const AuthPage = ({ onAuth }) => {
     const [formData, setFormData] = useState({ username: "", email: "", password: "" });
     const [loading, setLoading] = useState(false);
 
+    // --- ADDED GOOGLE SUCCESS HANDLER ---
+    const handleGoogleSuccess = async (credentialResponse) => {
+        setLoading(true);
+        try {
+            const res = await fetch(`${API_URL}/google-login`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ token: credentialResponse.credential })
+            });
+            const data = await res.json();
+            if (data.token) onAuth(data);
+            else alert("Google Authentication Failed");
+        } catch (e) { alert("Neural Link Error during Google Login"); }
+        finally { setLoading(false); }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
@@ -204,6 +218,17 @@ const AuthPage = ({ onAuth }) => {
                     <div className="input-field"><Lock size={18} className="input-icon" /><input type="password" placeholder="Secure Passkey" onChange={e => setFormData({ ...formData, password: e.target.value })} required /></div>
                     <button className="auth-btn" disabled={loading}>{loading ? <Loader2 className="spinner-border spinner-border-sm" /> : <>{isRegister ? "Create Profile" : "Lets Start"}<ArrowRight size={18} className="ms-2" /></>}</button>
                 </form>
+
+                {/* --- ADDED GOOGLE LOGIN BUTTON --- */}
+                <div className="mt-4 d-flex justify-content-center">
+                    <GoogleLogin 
+                        onSuccess={handleGoogleSuccess} 
+                        onError={() => alert("Google Login Failed")}
+                        theme="filled_blue"
+                        shape="pill"
+                    />
+                </div>
+
                 <div className="auth-footer"><span>{isRegister ? "Already have a profile?" : "New subject identifier?"}</span><button className="switch-mode-btn" onClick={() => setIsRegister(!isRegister)}>{isRegister ? "Login to Link" : "Create New Profile"}</button></div>
             </div>
             <style>{`
@@ -232,6 +257,8 @@ const AuthPage = ({ onAuth }) => {
 
 const DashboardView = ({ user, setTab, history }) => {
     const gradientTextStyle = { background: 'linear-gradient(135deg, #60a5fa 0%, #a855f7 50%, #ec4899 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundSize: '200% auto', display: 'inline-block' };
+    
+    // ... (Your existing stats and skillMatrix code remains the same) ...
     const stats = useMemo(() => {
         const sessions = {};
         history.forEach(h => {
@@ -268,15 +295,36 @@ const DashboardView = ({ user, setTab, history }) => {
     return (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
             <div className="mb-5 d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3">
-                <div>
-                    <h6 className="text-primary fw-bold tracking-widest mb-2 uppercase" style={{ fontSize: '0.75rem' }}>Status: Online</h6>
-                    <h1 className="fw-black mb-0">Welcome, <span style={gradientTextStyle}>{user?.name}</span></h1>
+                
+                {/* --- NEW SECTION FOR USER IMAGE AND NAME --- */}
+                <div className="d-flex align-items-center gap-3">
+                    {user?.picture ? (
+                        <img 
+                            src={user.picture} 
+                            alt="Profile" 
+                            className="rounded-circle border border-primary border-opacity-25 shadow-lg"
+                            style={{ width: '64px', height: '64px', objectFit: 'cover' }}
+                            referrerPolicy="no-referrer" 
+                        />
+                    ) : (
+                        <div className="p-3 rounded-circle bg-primary bg-opacity-10 text-primary">
+                            <UserIcon size={32} />
+                        </div>
+                    )}
+                    <div>
+                        <h6 className="text-primary fw-bold tracking-widest mb-2 uppercase" style={{ fontSize: '0.75rem' }}>Status: Online</h6>
+                        <h1 className="fw-black mb-0">Welcome, <span style={gradientTextStyle}>{user?.name}</span></h1>
+                    </div>
                 </div>
+                {/* --- END OF IMAGE SECTION --- */}
+
                 <div className="p-3 px-4 rounded-4" style={glassStyle}>
                     <span className="small opacity-50 d-block">Intelligence Level</span>
                     <span className="h4 fw-black text-gradient">{stats.level}</span>
                 </div>
             </div>
+
+            {/* ... rest of your dashboard code ... */}
             <div className="row g-3 g-md-4 mb-5">
                 {[
                     { label: 'Avg Accuracy', value: stats.accuracy, icon: <TrendingUp size={20}/>, color: '#3b82f6' },
@@ -293,6 +341,7 @@ const DashboardView = ({ user, setTab, history }) => {
                 ))}
                 <div className="col-12 col-md-3"><div className="p-3 p-md-4 h-100 d-flex align-items-center justify-content-center" style={glassStyle}><DifficultyCircle stats={stats.diffCounts} /></div></div>
             </div>
+            {/* (Keep the rest of your original code here) */}
             <div className="row g-4">
                 <div className="col-lg-8"><div className="p-4 p-md-5 rounded-5 h-100" style={{ minHeight: '300px', background: 'linear-gradient(135deg, rgba(59,130,246,0.15), transparent)', border: '1px solid rgba(59,130,246,0.2)' }}>
                     <h2 className="fw-black mb-3">Initialize Neural Assessment</h2>

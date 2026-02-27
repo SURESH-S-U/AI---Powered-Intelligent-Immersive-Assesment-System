@@ -4,11 +4,14 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+// --- ADDED GOOGLE LIBRARY ---
+const { OAuth2Client } = require('google-auth-library');
 
 dotenv.config();
 const app = express();
+// --- INITIALIZE GOOGLE CLIENT ---
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-// Frontend Connection URL
 app.use(
   cors({
     origin: [
@@ -32,8 +35,10 @@ mongoose.connect(process.env.MONGO_URI)
 const UserSchema = new mongoose.Schema({
     username: String, 
     email: { type: String, unique: true }, 
-    password: { type: String }, 
-    level: { type: String, default: "Beginner" }
+    password: { type: String, required: false }, // --- UPDATED TO OPTIONAL FOR GOOGLE USERS ---
+    level: { type: String, default: "Beginner" },
+    googleId: { type: String }, // --- ADDED TO TRACK GOOGLE LOGINS ---
+    picture: String // --- ADDED TO STORE PROFILE IMAGE URL ---
 });
 const User = mongoose.model("User", UserSchema);
 
@@ -73,9 +78,7 @@ const callGitHubAI = async (prompt) => {
         });
         const result = await response.json();
         return result.choices[0].message.content;
-    } catch (error) {
-        throw error;
-    }
+    } catch (error) { throw error; }
 };
 
 const cleanJSON = (text) => {
@@ -86,6 +89,46 @@ const cleanJSON = (text) => {
 };
 
 // --- ROUTES ---
+
+// --- NEW GOOGLE LOGIN ROUTE ---
+app.post("/google-login", async (req, res) => {
+    const { token } = req.body;
+    try {
+        const ticket = await client.verifyIdToken({
+            idToken: token,
+            audience: process.env.GOOGLE_CLIENT_ID,
+        });
+        const payload = ticket.getPayload();
+        
+        // 1. Extract 'picture' from the Google payload
+        const { email, name, sub, picture } = payload; 
+
+        let user = await User.findOne({ email });
+
+        if (!user) {
+            user = new User({
+                username: name,
+                email: email,
+                googleId: sub,
+                level: "Beginner"
+            });
+            await user.save();
+        }
+
+        const appToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET || "NEXA_SECRET");
+        
+        // 2. Send the picture URL back to the frontend
+        res.json({ 
+            token: appToken, 
+            user: { 
+                id: user._id, 
+                name: user.username, 
+                level: user.level,
+                picture: picture // <--- This is the Gmail image URL
+            } 
+        });
+    } catch (e) { res.status(400).json({ error: "Google Auth Failed" }); }
+});
 
 app.post("/register", async (req, res) => {
     try {
@@ -103,7 +146,7 @@ app.post("/login", async (req, res) => {
             const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET || "NEXA_SECRET");
             res.json({ 
                 token, 
-                user: { id: user._id, name: user.username, level: user.level } 
+                user: { id: user._id, name: user.username, level: user.level, picture: user.picture } // --- ADDED picture TO RESPONSE ---
             });
         } else { res.status(401).json({ error: "Invalid Credentials" }); }
     } catch (e) { res.status(500).json({ error: "Server Error" }); }

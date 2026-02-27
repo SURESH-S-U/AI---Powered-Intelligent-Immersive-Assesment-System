@@ -25,3 +25,7 @@ GeminiAPI_Code.txt
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+
+new.js
+server2.js
