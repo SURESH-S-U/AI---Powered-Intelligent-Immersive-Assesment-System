@@ -134,33 +134,42 @@ app.post("/login", async (req, res) => {
 });
 
 // CREATE ROOM: Added "concise" prompt for adaptive mode
+// CREATE ROOM: Now supports both AI generation AND Direct JSON Import
 app.post("/create-room", async (req, res) => {
-    // 1. Added 'username' to the destructuring
-    const { creatorId, username, roomCode, settings, studyMaterial } = req.body;
+    // 1. Added 'customQuestions' to the destructuring
+    const { creatorId, username, roomCode, settings, studyMaterial, customQuestions } = req.body;
     const { type, qCount, difficulty, timer } = settings;
 
     try {
-        let prompt = `Generate ${qCount} ${difficulty} level questions based on: ${studyMaterial || "General Knowledge"}. 
-        Format: Return a JSON object with a "questions" array. 
-        Each question must have: "challenge", "options" (array of 4 strings), "correctAnswer", and "explanation".`;
-        
-        if (type === 'adaptive') {
-            // Updated prompt to use the dynamic 'timer' value for scenario length
-            prompt = `Generate ${qCount} situational scenarios for ${difficulty} level based on ${studyMaterial}. 
-            CRITICAL: Each scenario must be concise enough to be read and answered within ${timer} seconds. 
-            Format: JSON object with "questions" array. Each: {"challenge": "scenario text"}.`;
+        let roomQuestions;
+
+        // 2. CHECK: If user provided their own questions via JSON, use them directly
+        if (customQuestions && Array.isArray(customQuestions) && customQuestions.length > 0) {
+            roomQuestions = customQuestions;
+        } 
+        // 3. OTHERWISE: Use the AI to generate questions (Existing Logic)
+        else {
+            let prompt = `Generate ${qCount} ${difficulty} level questions based on: ${studyMaterial || "General Knowledge"}. 
+            Format: Return a JSON object with a "questions" array. 
+            Each question must have: "challenge", "options" (array of 4 strings), "correctAnswer", and "explanation".`;
+            
+            if (type === 'adaptive') {
+                prompt = `Generate ${qCount} situational scenarios for ${difficulty} level based on ${studyMaterial}. 
+                CRITICAL: Each scenario must be concise enough to be read and answered within ${timer} seconds. 
+                Format: JSON object with "questions" array. Each: {"challenge": "scenario text"}.`;
+            }
+
+            const aiResponse = await callGitHubAI(prompt);
+            const data = cleanJSON(aiResponse);
+            roomQuestions = data.questions;
         }
 
-        const aiResponse = await callGitHubAI(prompt);
-        const data = cleanJSON(aiResponse);
-
-        // 2. Added 'creatorName' to the new Room instance
         const room = new Room({ 
             creatorId, 
-            creatorName: username, // This allows the Lobby to show "Host: Name"
+            creatorName: username,
             roomCode, 
             settings, 
-            questions: data.questions, 
+            questions: roomQuestions, // This will now be either AI-generated or your Custom JSON
             status: 'waiting' 
         });
 
