@@ -33,13 +33,21 @@ const UserSchema = new mongoose.Schema({
 });
 const User = mongoose.model("User", UserSchema);
 
+// --- Update RoomSchema in backend ---
 const RoomSchema = new mongoose.Schema({ 
     roomCode: { type: String, unique: true }, 
     creatorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, 
-    settings: Object, 
-    questions: Array, // Stores: challenge, options, correctAnswer, explanation
+    creatorName: String, 
+    settings: {
+        type: { type: String }, // CORRECTED: This tells Mongoose the field name is "type"
+        qCount: { type: Number },
+        difficulty: { type: String },
+        timer: { type: Number }
+    }, 
+    questions: Array, 
     status: { type: String, default: 'waiting' }, 
     startTime: { type: Date }, 
+    participants: Array, 
     timestamp: { type: Date, default: Date.now } 
 });
 const Room = mongoose.model("Room", RoomSchema);
@@ -127,25 +135,54 @@ app.post("/login", async (req, res) => {
 
 // CREATE ROOM: Added "concise" prompt for adaptive mode
 app.post("/create-room", async (req, res) => {
-    const { creatorId, roomCode, settings, studyMaterial } = req.body;
-    const { type, qCount, difficulty } = settings;
+    // 1. Added 'username' to the destructuring
+    const { creatorId, username, roomCode, settings, studyMaterial } = req.body;
+    const { type, qCount, difficulty, timer } = settings;
+
     try {
-        let prompt = `Generate ${qCount} ${difficulty} questions based on: ${studyMaterial || "General Knowledge"}. 
+        let prompt = `Generate ${qCount} ${difficulty} level questions based on: ${studyMaterial || "General Knowledge"}. 
         Format: Return a JSON object with a "questions" array. 
         Each question must have: "challenge", "options" (array of 4 strings), "correctAnswer", and "explanation".`;
         
         if (type === 'adaptive') {
+            // Updated prompt to use the dynamic 'timer' value for scenario length
             prompt = `Generate ${qCount} situational scenarios for ${difficulty} level based on ${studyMaterial}. 
-            CRITICAL: Each scenario must be under 40 words so it can be read in 30 seconds. 
+            CRITICAL: Each scenario must be concise enough to be read and answered within ${timer} seconds. 
             Format: JSON object with "questions" array. Each: {"challenge": "scenario text"}.`;
         }
 
         const aiResponse = await callGitHubAI(prompt);
         const data = cleanJSON(aiResponse);
-        const room = new Room({ creatorId, roomCode, settings, questions: data.questions, status: 'waiting' });
+
+        // 2. Added 'creatorName' to the new Room instance
+        const room = new Room({ 
+            creatorId, 
+            creatorName: username, // This allows the Lobby to show "Host: Name"
+            roomCode, 
+            settings, 
+            questions: data.questions, 
+            status: 'waiting' 
+        });
+
         await room.save();
         res.json({ success: true, room });
-    } catch (e) { res.status(500).json({ error: "Generation Error" }); }
+    } catch (e) { 
+        console.error("Room Creation Error:", e);
+        res.status(500).json({ error: "Generation Error" }); 
+    }
+});
+
+app.post("/room/:code/join", async (req, res) => {
+    const { userId, username, picture } = req.body;
+    try {
+        const room = await Room.findOneAndUpdate(
+            { roomCode: req.params.code },
+            { $addToSet: { participants: { userId, username, picture } } }, 
+            { new: true }
+        );
+        if (!room) return res.status(404).json({ error: "Room not found" });
+        res.json(room);
+    } catch (e) { res.status(500).json({ error: "Join Error" }); }
 });
 
 app.put("/room/:code/start", async (req, res) => {

@@ -563,256 +563,359 @@ const RoomsView = ({ user, refreshHistory }) => {
     const [view, setView] = useState('landing');
     const [roomCode, setRoomCode] = useState('');
     const [isCreator, setIsCreator] = useState(false);
-    const [roomSettings, setRoomSettings] = useState({ type: 'multi', qCount: 5, difficulty: 'Intermediate', isTimed: true });
-    const [uploadData, setUploadData] = useState({ file: null, text: '' });
+    
+    const [roomSettings, setRoomSettings] = useState({ 
+        type: 'multi', 
+        qCount: 5, 
+        difficulty: 'Intermediate', 
+        timer: 30 
+    });
+    const [customQ, setCustomQ] = useState("");
+    const [uploadData, setUploadData] = useState({ text: '' });
+    
     const [roomSessionActive, setRoomSessionActive] = useState(false);
     const [loading, setLoading] = useState(false);
     const [roomData, setRoomData] = useState(null);
     const [leaderboardData, setLeaderboardData] = useState(null);
     const [expandedReportId, setExpandedReportId] = useState(null);
 
-    // Sync Logic: Poll for room status and startTime
+    // Sync logic for Lobby
+    // Fetch Results logic with a small delay to ensure backend data aggregation is complete
     useEffect(() => {
-        let interval;
-        if (view === 'lobby' && !roomSessionActive) {
-            interval = setInterval(async () => {
+        if (view === 'results' && roomCode) {
+            const getResults = async () => {
+                setLoading(true);
+                // 1. Small settling delay (800ms) ensures all participant writes are finished on the DB
+                await new Promise(resolve => setTimeout(resolve, 800)); 
+                
                 try {
-                    const res = await fetch(`${API_URL}/room/${roomCode}`);
+                    const res = await fetch(`${API_URL}/room-results/${roomCode}?userId=${user.id}`);
                     const data = await res.json();
-                    setRoomData(data);
-                    // If admin started the test, activate for everyone
-                    if (data.status === 'in-progress' && data.startTime) {
-                        setRoomSessionActive(true);
-                        clearInterval(interval);
+                    
+                    if (data.success || data.leaderboard) {
+                        // 2. Explicitly update isCreator and roomData to ensure they match the latest DB state
+                        setLeaderboardData(data.leaderboard);
+                        setIsCreator(data.creatorId === user.id);
+                        setRoomData(prev => ({ 
+                            ...prev, 
+                            reports: data.reports, 
+                            isAdmin: data.isAdmin,
+                            creatorId: data.creatorId 
+                        }));
+                        
+                        // 3. Default the view to the current user's diagnostic
+                        setExpandedReportId(user.id);
                     }
-                } catch (e) { console.error("Sync error"); }
-            }, 2000);
+                } catch (e) { 
+                    console.error("Results synchronization error:", e); 
+                } finally { 
+                    setLoading(false); 
+                }
+            };
+            getResults();
         }
-        return () => clearInterval(interval);
-    }, [view, roomSessionActive, roomCode]);
+    }, [view, roomCode, user.id]);
+
+    // Fetch Results logic
+    useEffect(() => {
+        if (view === 'results' && roomCode) {
+            const getResults = async () => {
+                setLoading(true);
+                try {
+                    const res = await fetch(`${API_URL}/room-results/${roomCode}?userId=${user.id}`);
+                    const data = await res.json();
+                    setLeaderboardData(data.leaderboard);
+                    setRoomData(prev => ({ ...prev, reports: data.reports, isAdmin: data.isAdmin }));
+                    
+                    // NEW LOGIC: If the user is NOT the creator, auto-expand their own report
+                    const isRoomCreator = data.creatorId === user.id; // Or check via state/data
+                    if (!isRoomCreator) {
+                        setExpandedReportId(user.id);
+                    }
+                } catch (e) { console.error("Results fetch error"); }
+                finally { setLoading(false); }
+            };
+            getResults();
+        }
+    }, [view, roomCode, user.id]); // Note: ensures expandedReportId is set correctly on load
 
     const handleCreateRoom = async () => {
         setLoading(true);
         const code = Math.random().toString(36).substring(2, 10).toUpperCase();
+        const finalSettings = { ...roomSettings, qCount: customQ !== "" ? parseInt(customQ) : roomSettings.qCount };
         try {
             const res = await fetch(`${API_URL}/create-room`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ creatorId: user.id, roomCode: code, settings: roomSettings, studyMaterial: uploadData.text })
+                body: JSON.stringify({ creatorId: user.id, username: user.name, roomCode: code, settings: finalSettings, studyMaterial: uploadData.text })
             });
             const data = await res.json();
             if (data.success) {
+                await fetch(`${API_URL}/room/${code}/join`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ userId: user.id, username: user.name })
+                });
                 setRoomCode(code);
-                setRoomData(data.room);
                 setIsCreator(true);
                 setView('lobby');
             }
-        } catch (e) { alert("Core Link Failed"); }
+        } catch (e) { alert("Generation Failed"); }
         finally { setLoading(false); }
     };
 
     const handleJoinRoom = async (e) => {
         e.preventDefault();
-        if (roomCode.length < 6) return alert("Code too short");
         setLoading(true);
         try {
-            const res = await fetch(`${API_URL}/room/${roomCode}`);
+            const res = await fetch(`${API_URL}/room/${roomCode}/join`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ userId: user.id, username: user.name })
+            });
             const data = await res.json();
             if (res.ok) {
                 setRoomData(data);
                 setIsCreator(data.creatorId === user.id);
                 setView('lobby');
             } else alert("Invalid Code");
-        } catch (e) { alert("Error"); }
+        } catch (e) { alert("Join Error"); }
         finally { setLoading(false); }
     };
 
-    const handleAdminStart = async () => {
-        try {
-            const res = await fetch(`${API_URL}/room/${roomCode}/start`, { method: "PUT" });
-            const data = await res.json();
-            if (res.ok && data.room) {
-                // IMPORTANT: Update local roomData so Admin has the startTime
-                setRoomData(data.room); 
-                setRoomSessionActive(true);
-            }
-        } catch (e) { alert("Start Failed"); }
-    };
-
-    const handleFinish = async () => {
+    const handleFinish = () => {
         setRoomSessionActive(false);
-        setLoading(true);
-        try {
-            const res = await fetch(`${API_URL}/room-results/${roomCode}?userId=${user.id}`);
-            const data = await res.json();
-            setLeaderboardData(data);
-            setView('results');
-            
-            // REFRESH HISTORY: This tells the main App to fetch the latest 
-            // assessment records so they appear in the Reports tab instantly.
-            if (refreshHistory) {
-                refreshHistory();
-            }
-        } catch (e) { 
-            console.error("Sync Error", e);
-            alert("Sync Error"); 
-        } finally { 
-            setLoading(false); 
-        }
+        setView('results');
+        if (refreshHistory) refreshHistory();
     };
 
-    // --- Lobby View ---
-    if (view === 'lobby') return (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mx-auto" style={{ maxWidth: '850px' }}>
-            <div className="p-4 p-md-5" style={glassStyle}>
-                <div className="text-center mb-5">
-                    <div className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-20 px-3 py-2 mb-3 fw-bold">Room: {roomCode}</div>
-                    <h2 className="fw-black mb-1">Synchronization Lobby</h2>
-                    <p className="opacity-50">{isCreator ? "Initialize when ready." : "Waiting for Admin to start link..."}</p>
+    // --- RESULTS VIEW ---
+    // --- RESULTS VIEW (Logic Corrected) ---
+    if (view === 'results') return (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mx-auto" style={{ maxWidth: '1000px' }}>
+            <div className="d-flex justify-content-between align-items-center mb-5">
+                <div>
+                    <h6 className="text-primary fw-bold tracking-widest uppercase mb-1">Session Concluded</h6>
+                    <h1 className="fw-black mb-0 text-white">Synchronization Results</h1>
                 </div>
-                <div className="row g-4 mb-5">
-                    <div className="col-12">
-                        <div className="p-4 rounded-4" style={{ background: 'rgba(59, 130, 246, 0.03)', border: '1px dashed rgba(59, 130, 246, 0.2)' }}>
-                            <h6 className="fw-bold mb-3 text-primary small">PROTOCOL SETTINGS</h6>
-                            <div className="d-flex gap-4 small opacity-70">
-                                <span>Type: <b className="uppercase">{roomData?.settings.type}</b></span>
-                                <span>Count: <b>{roomData?.settings.qCount}</b></span>
-                                <span>Difficulty: <b>{roomData?.settings.difficulty}</b></span>
+                <button className="btn btn-outline-primary px-4 rounded-pill fw-bold" onClick={() => setView('landing')}>BACK TO HUB</button>
+            </div>
+
+            <div className="row g-4">
+                {/* LEADERBOARD: Shows all participants and scores to everyone */}
+                <div className="col-lg-5">
+                    <div className="p-4 rounded-5 border border-white border-opacity-10 bg-dark shadow-lg h-100">
+                        <div className="d-flex align-items-center gap-3 mb-4">
+                            <Trophy className="text-warning" size={24} />
+                            <h5 className="fw-black text-white uppercase tracking-widest mb-0">Operative Rankings</h5>
+                        </div>
+                        {loading ? <div className="text-center py-5" ><Loader2 className="animate-spin text-primary"/></div> : (
+                            <div className="d-flex flex-column gap-3">
+                                {leaderboardData?.map((entry, idx) => (
+                                    <div key={idx} className="p-3 rounded-4 border border-white border-opacity-10 bg-black bg-opacity-5 d-flex justify-content-between align-items-center" >
+                                        <div className="d-flex align-items-center gap-3 text-white">
+                                            <span className="opacity-40 fw-black">#{idx + 1}</span>
+                                            <div>
+                                                <div className="fw-bold small">{entry.username} {entry.userId === user.id ? "(You)" : ""}</div>
+                                                <div className="text-primary fw-bold" style={{ fontSize: '0.75rem' }}>{entry.score}% Accuracy</div>
+                                            </div>
+                                        </div>
+
+                                        {/* CORRECTED PERMISSION LOGIC */}
+                                        {/* Admin (isCreator) sees buttons for everyone. Users see button ONLY for themselves. */}
+                                        {(isCreator || entry.userId === user.id) ? (
+                                            <button 
+                                                className={`btn btn-sm rounded-pill px-3 fw-bold ${expandedReportId === entry.userId ? 'btn-light text-dark' : 'btn-primary'}`}
+                                                style={{ fontSize: '0.65rem' }}
+                                                onClick={() => setExpandedReportId(expandedReportId === entry.userId ? null : entry.userId)}
+                                            >
+                                                {expandedReportId === entry.userId ? 'HIDE' : 'VIEW REPORT'}
+                                            </button>
+                                        ) : (
+                                            <div className="text-xxs opacity-25 uppercase text-white tracking-widest px-2">Encrypted</div>
+                                        )}
+                                    </div>
+                                ))}
                             </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* DIAGNOSTIC DATA: Detailed report based on expandedReportId */}
+                <div className="col-lg-7">
+                    <div className="p-4 rounded-5 border border-white border-opacity-10 bg-black bg-opacity-40 h-100">
+                        <h5 className="text-primary fw-black uppercase tracking-widest mb-4" style={{ fontSize: '0.8rem' }}>Diagnostic Data Analysis</h5>
+                        {!expandedReportId ? (
+                            <div className="text-center py-5 h-100 d-flex flex-column justify-content-center text-white">
+                                <Brain className="opacity-10 mx-auto mb-3" size={64} />
+                                <p className="opacity-25 italic small">{isCreator ? "Select an operative to view detailed analysis." : "Deep diagnostics restricted to Neural Host."}</p>
+                            </div>
+                        ) : (
+                            <div className="d-flex flex-column gap-4">
+                                {/* Filters the reports array by the user selected in the leaderboard */}
+                                {roomData?.reports?.filter(r => r.userId === expandedReportId).map((report, idx) => (
+                                    <div key={idx} className="p-4 rounded-4 border border-white border-opacity-5 bg-dark shadow-sm text-white">
+                                        <div className="d-flex justify-content-between mb-3 align-items-start">
+                                            <span className="badge bg-dark bg-opacity-10 text-primary border border-primary border-opacity-20 px-3">Challenge {idx + 1}</span>
+                                            <span className={`fw-black ${report.score >= 8 ? 'text-success' : 'text-danger'}`} style={{ fontSize: '0.75rem' }}>SCORE: {report.score}/10</span>
+                                        </div>
+                                        <h6 className="fw-bold mb-3" style={{ fontSize: '0.95rem' }}>{report.challenge}</h6>
+                                        <div className="p-3 rounded-3 bg-dark bg-opacity-5 border border-white border-opacity-5 mb-3">
+                                            <span className="text-xxs uppercase opacity-50 d-block mb-1">Your Response : </span>
+                                            <div className="small opacity-90">{report.answer || "No response."}</div>
+                                        </div>
+                                        <div className="p-3 rounded-3 border border-primary border-opacity-20 bg-primary bg-opacity-10">
+                                            <span className="text-xxs uppercase text-primary d-block mb-1 fw-bold">Neural Feedback</span>
+                                            <div className="small opacity-100">{report.feedback}</div>
+                                        </div>
+                                    </div>
+                                ))}
+                                
+                                {/* AI Suggestion logic */}
+                                {roomData?.reports?.find(r => r.userId === expandedReportId)?.suggestion && (
+                                    <div className="mt-4 p-4 rounded-4 shadow-sm" 
+                                        style={{ 
+                                            background: 'rgba(250, 204, 21, 0.05)', 
+                                            border: '1px solid rgba(250, 204, 21, 0.15)',
+                                            borderLeft: '4px solid #facc15' 
+                                        }}>
+                                        <div className="d-flex align-items-center gap-2 mb-2">
+                                            <Zap size={16} className="text-warning" />
+                                            <h6 className="text-warning fw-black uppercase mb-0 small tracking-widest">Concepts to Prepare Well</h6>
+                                        </div>
+                                        <p className="text-white mb-0 opacity-90" style={{ lineHeight: '1.6', fontSize: '0.9rem' }}>
+                                            {roomData.reports.find(r => r.userId === expandedReportId).suggestion}
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </motion.div>
+        // 
+    );
+
+    // --- 2. LOBBY VIEW (Logic Fixed) ---
+    if (view === 'lobby') return (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="min-vh-100 p-3 p-md-5">
+            <div className="mx-auto mb-4 d-flex flex-column flex-lg-row gap-3 align-items-stretch" style={{ maxWidth: '950px' }}>
+                <div className="px-4 py-3 rounded-4 border border-primary border-opacity-20 bg-dark shadow-lg d-flex flex-column justify-content-center text-white">
+                    <span className="text-primary small d-block fw-bold uppercase tracking-widest mb-1" style={{ fontSize: '0.65rem' }}>Access Code</span>
+                    <h2 className="fw-black mb-0" style={{ letterSpacing: '4px', lineHeight: 1 }}>{roomCode}</h2>
+                </div>
+                <div className="flex-grow-1 px-4 py-3 rounded-4 border border-white border-opacity-10 bg-black bg-opacity-40 shadow-lg d-flex flex-column justify-content-center">
+                    <span className="text-primary small d-block fw-bold uppercase tracking-widest mb-2" style={{ fontSize: '0.65rem' }}>Protocol Specs</span>
+                    <div className="row g-3 text-white">
+                        <div className="col-6 col-md-3">
+                            <span className="opacity-50 small d-block uppercase" style={{ fontSize: '0.6rem' }}>Mode</span>
+                            <span className="fw-bold">{roomData?.settings.type === 'multi' ? 'MCQ' : 'Scenario'}</span>
+                        </div>
+                        <div className="col-6 col-md-3">
+                            <span className="opacity-50 small d-block uppercase" style={{ fontSize: '0.6rem' }}>Complexity</span>
+                            <span className="fw-bold">{roomData?.settings.difficulty}</span>
+                        </div>
+                        <div className="col-6 col-md-3">
+                            <span className="opacity-50 small d-block uppercase" style={{ fontSize: '0.6rem' }}>Limit</span>
+                            <span className="fw-bold">{roomData?.settings.qCount} Items</span>
+                        </div>
+                        <div className="col-6 col-md-3">
+                            <span className="opacity-50 small d-block uppercase" style={{ fontSize: '0.6rem' }}>Timer</span>
+                            <span className="fw-bold text-warning">{roomData?.settings.timer}s / Q</span>
                         </div>
                     </div>
                 </div>
-                <div className="d-flex flex-column flex-md-row gap-3">
-                    {isCreator ? (
-                        <button className="btn btn-primary flex-grow-1 py-3 fw-bold rounded-4 shadow-lg" onClick={handleAdminStart}>INITIALIZE NEURAL LINK</button>
-                    ) : (
-                        <div className="btn btn-outline-light disabled flex-grow-1 py-3 fw-bold rounded-4 opacity-25">SYNCHRONIZING WITH HOST...</div>
-                    )}
-                    <button className="btn btn-outline-danger px-4 rounded-4 fw-bold" onClick={() => setView('landing')}>LEAVE</button>
+            </div>
+
+            <div className="mx-auto" style={{ maxWidth: '950px' }}>
+                <div className="p-4 p-md-5 rounded-5" style={{ ...glassStyle, background: 'rgba(2, 6, 23, 0.7)' }}>
+                    <div className="text-center mb-5 border-bottom border-white border-opacity-5 pb-4">
+                        <h1 className="fw-black mb-1 display-5 text-white">Synchronization Lobby</h1>
+                        <p className="text-primary fw-bold small uppercase tracking-widest mb-0">Neural Host: <span className="text-white">{roomData?.creatorName || 'Initialising...'}</span></p>
+                    </div>
+                    <div className="mb-5">
+                        <h6 className="fw-bold mb-4 opacity-50 small uppercase tracking-widest text-white">Active Operatives ({roomData?.participants?.length || 0})</h6>
+                        <div className="d-flex flex-wrap gap-2">
+                            {roomData?.participants?.map((p, i) => (
+                                <div key={i} className="px-3 py-2 rounded-3 border border-white border-opacity-10 bg-dark bg-opacity-50 d-flex align-items-center gap-2 text-white">
+                                    <div className="bg-primary rounded-circle" style={{ width: 8, height: 8, boxShadow: '0 0 10px rgba(59, 130, 246, 0.5)' }}></div>
+                                    <span className="small fw-bold">{p.username} {p.userId === user.id ? "(You)" : ""}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="d-flex flex-column flex-md-row gap-3 pt-4 border-top border-white border-opacity-5">
+                        {isCreator ? (
+                            <button className="btn btn-primary btn-lg flex-grow-1 py-3 fw-black rounded-4 shadow-lg" onClick={async () => {
+                                const res = await fetch(`${API_URL}/room/${roomCode}/start`, { method: "PUT" });
+                                const data = await res.json();
+                                if (res.ok) { 
+                                    setRoomData(data.room); // Correctly update for admin
+                                    setRoomSessionActive(true); 
+                                }
+                            }}>INITIALIZE NEURAL START</button>
+                        ) : (
+                            <div className="flex-grow-1 p-3 rounded-4 border border-white border-opacity-10 text-center opacity-50 fw-bold text-white">
+                                <Loader2 size={18} className="spinner-border-sm me-2 animate-spin" /> SYNCHRONIZING...
+                            </div>
+                        )}
+                        <button className="btn btn-outline-danger px-5 rounded-4 fw-bold" onClick={() => setView('landing')}>LEAVE</button>
+                    </div>
                 </div>
             </div>
 
             {roomSessionActive && roomData && (
                 <div className="position-fixed top-0 start-0 w-100 h-100 bg-dark z-3 p-3 p-md-5 overflow-auto" style={{ background: '#020617', zIndex: 9999 }}>
-                    <ActiveRoomSession 
-                        user={user} 
-                        roomData={roomData} 
-                        onEnd={handleFinish} 
-                    />
+                    <ActiveRoomSession user={user} roomData={roomData} onEnd={handleFinish} />
                 </div>
             )}
         </motion.div>
     );
 
-    // --- Results & Leaderboard View ---
-    if (view === 'results') return (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mx-auto" style={{ maxWidth: '850px' }}>
-            <div className="p-4 p-md-5" style={glassStyle}>
-                <div className="text-center mb-5">
-                    <Trophy size={42} className="text-warning mb-3" />
-                    <h2 className="fw-black">Leaderboard</h2>
-                    <p className="opacity-50 small uppercase tracking-widest">Protocol {roomCode} Results</p>
-                </div>
-                
-                <div className="mb-5">
-                    {leaderboardData?.leaderboard.map((p, i) => (
-                        <div key={i} className="mb-2">
-                            <div className={`p-3 rounded-4 d-flex align-items-center justify-content-between ${p.userId === user.id ? 'border border-primary bg-primary bg-opacity-10' : ''}`} style={{ background: 'rgba(255,255,255,0.02)' }}>
-                                <div className="d-flex align-items-center gap-3">
-                                    <span className="fw-black opacity-25">#0{i + 1}</span>
-                                    <span className="fw-bold">{p.username}</span>
-                                </div>
-                                <div className="d-flex align-items-center gap-3">
-                                    <span className="fw-black text-primary">{p.score}%</span>
-                                    {/* Updated Logic: Only Admin or the User themselves can see the button */}
-                                    {(leaderboardData.isAdmin || p.userId === user.id) ? (
-                                        <button 
-                                            className="btn btn-sm btn-outline-primary rounded-pill px-3" 
-                                            onClick={() => setExpandedReportId(expandedReportId === p.userId ? null : p.userId)}
-                                        >
-                                            {expandedReportId === p.userId ? "HIDE" : "VIEW REPORT"}
-                                        </button>
-                                    ) : (
-                                        <span className="badge rounded-pill bg-white bg-opacity-5 text-white opacity-25 px-3 py-2 small">LOCKED</span>
-                                    )}
-                                </div>
-                            </div>
-                            
-                            <AnimatePresence>
-                                {expandedReportId === p.userId && (
-                                    <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden mt-2 p-4 rounded-4" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                        {/* Dynamic Header based on Test Type */}
-                                        <div className="text-center mb-4 pb-3 border-bottom border-white border-opacity-10">
-                                            <h4 className="fw-black text-gradient">
-                                                {roomData.settings.type === 'multi' 
-                                                    ? `${leaderboardData.reports.filter(r => r.userId === p.userId && r.score >= 8).length} / ${roomData.settings.qCount} Correct`
-                                                    : `${p.score}% Accuracy`
-                                                }
-                                            </h4>
-                                        </div>
-
-                                        {leaderboardData.reports.filter(r => r.userId === p.userId).map((rep, idx) => (
-                                            <div key={idx} className="mb-3 pb-3 border-bottom border-white border-opacity-5">
-                                                <div className="d-flex justify-content-between small mb-1">
-                                                    <span className="opacity-50 fw-bold">Q{idx + 1}</span>
-                                                    <span className={rep.score >= 8 ? 'text-success fw-bold' : 'text-danger fw-bold'}>
-                                                        {roomData.settings.type === 'multi' ? (rep.score >= 8 ? 'CORRECT' : 'INCORRECT') : `${rep.score * 10}%`}
-                                                    </span>
-                                                </div>
-                                                <div className="fw-bold mb-1" style={{ fontSize: '0.9rem' }}>{rep.challenge}</div>
-                                                <div className="small opacity-60 italic">Feedback: {rep.feedback}</div>
-                                            </div>
-                                        ))}
-
-                                        {/* Study Suggestions at the Bottom */}
-                                        <div className="mt-4 p-3 rounded-4" style={{ background: 'rgba(59, 130, 246, 0.05)', border: '1px solid rgba(59, 130, 246, 0.1)' }}>
-                                            <h6 className="text-primary fw-bold small mb-2 uppercase tracking-widest">Neural Suggestions</h6>
-                                            <p className="small mb-0 opacity-70">{leaderboardData.reports.find(r => r.userId === p.userId)?.suggestion || "Keep practicing the core concepts."}</p>
-                                        </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </div>
-                    ))}
-                </div>
-                <button className="btn btn-primary w-100 py-3 rounded-4 fw-bold shadow-lg" onClick={() => setView('landing')}>DISCONNECT PROTOCOL</button>
-            </div>
-        </motion.div>
-    );
-
-    // --- Landing / Initialization View ---
+    // --- 3. LANDING VIEW ---
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <div className="mb-4"><h1 className="fw-black">Neural Rooms</h1><p className="opacity-50">Shared real-time synchronization protocols.</p></div>
+            <div className="mb-4"><h1 className="fw-black">Neural Rooms</h1><p className="opacity-50">Configure global synchronization parameters.</p></div>
             <div className="row g-4">
-                <div className="col-lg-6">
+                <div className="col-lg-7">
                     <div className="p-4 p-md-5 h-100" style={glassStyle}>
-                        <Plus size={32} className="text-primary mb-4" />
-                        <h3 className="fw-black mb-3">Initialize</h3>
-                        <textarea className="custom-input mb-3" placeholder="Paste study material or topics..." rows="3" value={uploadData.text} onChange={e => setUploadData({ ...uploadData, text: e.target.value })} />
-                        <div className="row g-2 mb-4">
-                            <div className="col-6">
-                                <select className="custom-input small" value={roomSettings.type} onChange={e => setRoomSettings({ ...roomSettings, type: e.target.value })}>
-                                    <option value="multi" style={{ background: '#020617' }}>MCQ Mode</option>
-                                    <option value="adaptive" style={{ background: '#020617' }}>Scenario Mode</option>
+                        <h3 className="fw-black mb-4 d-flex align-items-center gap-3"><Plus className="text-primary"/> Host Session</h3>
+                        <div className="row g-3 mb-4">
+                            <div className="col-12 text-white">
+                                <label className="small fw-bold opacity-50 uppercase mb-2 d-block">Study Material</label>
+                                <textarea className="custom-input" placeholder="Paste context here..." rows="2" value={uploadData.text} onChange={e => setUploadData({ text: e.target.value })} />
+                            </div>
+                            <div className="col-md-6 text-white">
+                                <label className="small fw-bold opacity-50 uppercase mb-2 d-block">Difficulty</label>
+                                <select className="custom-input" value={roomSettings.difficulty} onChange={e => setRoomSettings({ ...roomSettings, difficulty: e.target.value })}>
+                                    <option value="Beginner" style={{ background: '#020617' }}>Easy</option>
+                                    <option value="Intermediate" style={{ background: '#020617' }}>Intermediate</option>
+                                    <option value="Advanced" style={{ background: '#020617' }}>Advanced</option>
                                 </select>
                             </div>
-                            <div className="col-6">
-                                <select className="custom-input small" value={roomSettings.qCount} onChange={e => setRoomSettings({ ...roomSettings, qCount: parseInt(e.target.value) })}>
-                                    {[3, 5, 10, 15].map(n => <option key={n} value={n} style={{ background: '#020617' }}>{n} Questions</option>)}
+                            <div className="col-md-6 text-white">
+                                <label className="small fw-bold opacity-50 uppercase mb-2 d-block">Timer</label>
+                                <select className="custom-input" value={roomSettings.timer} onChange={e => setRoomSettings({ ...roomSettings, timer: parseInt(e.target.value) })}>
+                                    <option value="15" style={{ background: '#020617' }}>15 Seconds</option>
+                                    <option value="30" style={{ background: '#020617' }}>30 Seconds</option>
+                                    <option value="60" style={{ background: '#020617' }}>1 Minute</option>
                                 </select>
+                            </div>
+                            <div className="col-md-6 text-white">
+                                <label className="small fw-bold opacity-50 uppercase mb-2 d-block">Questions Count</label>
+                                <input className="custom-input no-spinners" type="number" value={customQ} onChange={e => setCustomQ(e.target.value)} />
                             </div>
                         </div>
-                        <button className="btn btn-primary w-100 py-3 fw-bold rounded-4 shadow-lg" onClick={handleCreateRoom} disabled={loading}>{loading ? <Loader2 className="spinner-border spinner-border-sm" /> : "GENERATE ROOM"}</button>
+                        <button className="btn btn-primary w-100 py-3 fw-black rounded-4" onClick={handleCreateRoom} disabled={loading}>{loading ? <Loader2 size={18} className="animate-spin" /> : "GENERATE NEURAL ROOM"}</button>
                     </div>
                 </div>
-                <div className="col-lg-6">
-                    <div className="p-4 p-md-5 h-100" style={glassStyle}>
-                        <Users size={32} className="text-primary mb-4" />
-                        <h3 className="fw-black mb-3">Join</h3>
-                        <form onSubmit={handleJoinRoom} className="d-flex flex-column align-items-center">
-                            <input className="custom-input mb-3 text-center fs-5 tracking-widest text-uppercase" style={{ maxWidth: '280px' }} placeholder="ROOM CODE" maxLength="8" value={roomCode} onChange={e => setRoomCode(e.target.value.toUpperCase())} />
-                            <button className="btn btn-outline-primary w-100 py-3 fw-bold rounded-4" type="submit" disabled={loading}>{loading ? "LINKING..." : "CONNECT TO LINK"}</button>
+                <div className="col-lg-5">
+                    <div className="p-4 p-md-5 h-100 border border-primary border-opacity-10 rounded-5" style={{ background: 'rgba(59,130,246,0.02)' }}>
+                        <h3 className="fw-black mb-4 d-flex align-items-center gap-3"><Users className="text-primary"/> Join Session</h3>
+                        <form onSubmit={handleJoinRoom}>
+                            <input className="custom-input mb-4 text-center fs-4 fw-black tracking-widest uppercase" placeholder="CODE" value={roomCode} onChange={e => setRoomCode(e.target.value.toUpperCase())} />
+                            <button className="btn btn-outline-primary w-100 py-3 fw-bold rounded-4" type="submit" disabled={loading}>CONNECT TO LINK</button>
                         </form>
                     </div>
                 </div>
@@ -824,29 +927,28 @@ const RoomsView = ({ user, refreshHistory }) => {
 // --- NEW COMPONENT: Synchronized Active Session ---
 const ActiveRoomSession = ({ user, roomData, onEnd }) => {
     const { questions, startTime, settings } = roomData;
+    
+    // NEW: Get the dynamic timer from settings, default to 30 if not found
+    const STEP_TIME = settings.timer || 30; 
+
     const [currentStep, setCurrentStep] = useState(0);
     const [answers, setAnswers] = useState([]);
     const [selectedOption, setSelectedOption] = useState("");
     const [textInput, setTextInput] = useState("");
     const [evaluating, setEvaluating] = useState(false);
-    const [timeLeft, setTimeLeft] = useState(30);
+    
+    // Initialize timeLeft with the custom STEP_TIME
+    const [timeLeft, setTimeLeft] = useState(STEP_TIME);
 
-    // Refs to track current input values without re-triggering the timer useEffect
     const selectedRef = useRef("");
     const textRef = useRef("");
 
-    useEffect(() => {
-        selectedRef.current = selectedOption;
-    }, [selectedOption]);
-
-    useEffect(() => {
-        textRef.current = textInput;
-    }, [textInput]);
+    useEffect(() => { selectedRef.current = selectedOption; }, [selectedOption]);
+    useEffect(() => { textRef.current = textInput; }, [textInput]);
 
     const handleAutoFinish = useCallback(async (finalAnswers) => {
         if (evaluating) return;
         setEvaluating(true);
-        
         try {
             await fetch(`${API_URL}/evaluate-batch`, {
                 method: "POST",
@@ -861,11 +963,8 @@ const ActiveRoomSession = ({ user, roomData, onEnd }) => {
                     difficulty: settings.difficulty
                 })
             });
-            onEnd(); // This triggers the parent's handleFinish which fetches results
-        } catch (e) { 
-            console.error("Final Sync Failed", e); 
-            onEnd(); 
-        }
+            onEnd();
+        } catch (e) { console.error("Final Sync Failed", e); onEnd(); }
     }, [user, roomData, settings, evaluating, onEnd]);
 
     useEffect(() => {
@@ -878,12 +977,13 @@ const ActiveRoomSession = ({ user, roomData, onEnd }) => {
 
             const totalElapsedSeconds = Math.floor((now - start) / 1000);
             const safeElapsed = Math.max(0, totalElapsedSeconds);
-            const step = Math.floor(safeElapsed / 30);
-            const remaining = 30 - (safeElapsed % 30);
+            
+            // UPDATED: Use STEP_TIME instead of hardcoded 30
+            const step = Math.floor(safeElapsed / STEP_TIME);
+            const remaining = STEP_TIME - (safeElapsed % STEP_TIME);
 
             if (step >= questions.length) {
                 clearInterval(timer);
-                // Capture last response and finish
                 const finalSet = [...answers, {
                     challenge: questions[currentStep]?.challenge,
                     answer: settings.type === 'multi' ? selectedRef.current : textRef.current,
@@ -892,7 +992,6 @@ const ActiveRoomSession = ({ user, roomData, onEnd }) => {
                 handleAutoFinish(finalSet);
             } else {
                 if (step !== currentStep) {
-                    // Save previous question's answer
                     setAnswers(prev => [...prev, {
                         challenge: questions[currentStep]?.challenge,
                         answer: settings.type === 'multi' ? selectedRef.current : textRef.current,
@@ -907,7 +1006,7 @@ const ActiveRoomSession = ({ user, roomData, onEnd }) => {
         }, 1000);
 
         return () => clearInterval(timer);
-    }, [startTime, currentStep, questions, settings.type, answers, handleAutoFinish]);
+    }, [startTime, currentStep, questions, settings.type, answers, handleAutoFinish, STEP_TIME]); // Added STEP_TIME to deps
 
     if (!startTime) {
         return (
@@ -931,21 +1030,21 @@ const ActiveRoomSession = ({ user, roomData, onEnd }) => {
                 </div>
 
                 <div className="mb-4 w-100" style={{ background: 'rgba(255,255,255,0.05)', height: '4px', borderRadius: '2px' }}>
-                    <div className="timer-bar" style={{ width: `${(timeLeft / 30) * 100}%`, transition: 'width 1s linear' }}></div>
+                    {/* UPDATED: Width calculation now uses STEP_TIME */}
+                    <div className="timer-bar" style={{ width: `${(timeLeft / STEP_TIME) * 100}%`, transition: 'width 1s linear' }}></div>
                 </div>
 
                 {evaluating ? (
                     <div className="text-center py-5"><Loader2 className="spinner-border text-primary mb-3" /><p className="fw-bold opacity-50 uppercase">Syncing Results...</p></div>
                 ) : (
                     <>
-                        {/* REQ 2: Smaller font size and compressed line height for Adaptive Scenarios */}
                         <h2 className={`fw-bold mb-5 challenge-text ${settings.type === 'adaptive' ? 'fs-4 lh-sm' : ''}`}>
                             {currentQ?.challenge}
                         </h2>
                         
                         {settings.type === 'multi' ? (
                             <div className="row g-3">
-                                {currentQ?.options.map((opt, i) => (
+                                {currentQ?.options?.map((opt, i) => (
                                     <div className="col-12 col-md-6" key={i}>
                                         <button 
                                             className={`btn w-100 py-3 rounded-4 fw-bold text-start px-4 transition-all ${selectedOption === opt ? 'btn-primary shadow-lg' : 'btn-outline-light opacity-50'}`}
