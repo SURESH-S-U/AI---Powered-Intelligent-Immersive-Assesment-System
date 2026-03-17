@@ -426,6 +426,7 @@ const ActiveSession = ({ user, domains, type, limit, isTimed, difficulty, onEnd,
     const [answers, setAnswers] = useState([]);
     const [currentInput, setCurrentInput] = useState("");
     const [results, setResults] = useState(null);
+    const [suggestion, setSuggestion] = useState("");
     const [loading, setLoading] = useState(!predefinedQuestions);
     const [evaluating, setEvaluating] = useState(false);
     const [sessionId] = useState(existingSessionId || `session_${Date.now()}`);
@@ -455,28 +456,33 @@ const ActiveSession = ({ user, domains, type, limit, isTimed, difficulty, onEnd,
             const res = await fetch(`${API_URL}/evaluate-batch`, {
                 method: "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ 
-                    userId: user.id, 
-                    username: user.name, 
-                    answers: finalAnswers, 
-                    domains, 
-                    sessionId, 
-                    type, 
-                    difficulty 
+                    userId: user.id, username: user.name, 
+                    answers: finalAnswers, domains, sessionId, type, difficulty 
                 })
             });
             const data = await res.json();
             setResults(data.results);
+            setSuggestion(data.suggestion);
         } catch (e) { alert("Evaluation error."); }
         finally { setEvaluating(false); }
     }, [user.id, user.name, domains, sessionId, type, difficulty]);
 
     const handleNext = useCallback((autoAnswer = null) => {
         const finalAnswer = autoAnswer || currentInput || "No response provided";
-        const updatedAnswers = [...answers, { challenge: questions[currentStep]?.challenge, answer: finalAnswer }];
+        const updatedAnswers = [...answers, { 
+            challenge: questions[currentStep]?.challenge, 
+            answer: finalAnswer,
+            correctAnswer: questions[currentStep]?.correctAnswer || "" 
+        }];
         setAnswers(updatedAnswers);
         setCurrentInput("");
-        if (currentStep < questions.length - 1) { setCurrentStep(prev => prev + 1); setTimeLeft(30); }
-        else { clearInterval(timerRef.current); submitBatch(updatedAnswers); }
+        if (currentStep < questions.length - 1) { 
+            setCurrentStep(prev => prev + 1); 
+            setTimeLeft(30); 
+        } else { 
+            clearInterval(timerRef.current); 
+            submitBatch(updatedAnswers); 
+        }
     }, [answers, questions, currentStep, currentInput, submitBatch]);
 
     useEffect(() => {
@@ -491,68 +497,104 @@ const ActiveSession = ({ user, domains, type, limit, isTimed, difficulty, onEnd,
         return () => clearInterval(timerRef.current);
     }, [loading, evaluating, results, questions.length, isTimed, handleNext]);
 
-    if (loading) return <div className="text-center py-5"><Loader2 className="spinner-border text-primary mb-3" /><p className="fw-bold opacity-50 uppercase tracking-widest">Synchronizing Neural Link...</p></div>;
-    const currentChallenge = questions[currentStep]?.challenge || "";
+    if (loading) return <div className="text-center py-5"><Loader2 className="spinner-border text-primary mb-3 animate-spin" /><p className="fw-bold opacity-50 uppercase tracking-widest text-white">Synchronizing Neural Link...</p></div>;
+
+    const isAdaptive = type === 'adaptive';
+    const isGeneral = type === 'general';
 
     return (
         <div className="mx-auto" style={{ maxWidth: '850px' }}>
-            <div className="p-3 p-md-5" style={glassStyle}>
+            <div className="p-3 p-md-5" style={{...glassStyle, background: 'rgba(2, 6, 23, 0.8)'}}>
                 <div className="d-flex justify-content-between mb-4 align-items-center">
                     <div className="d-flex align-items-center gap-2">
-                        <span className="text-primary fw-bold small tracking-widest uppercase">Q {currentStep + 1}/{questions.length}</span>
+                        <span className="text-primary fw-bold small tracking-widest uppercase">
+                            {results ? 'Neural Diagnostics' : `${isGeneral ? 'General Knowledge' : 'Knowledge Link'} Q ${currentStep + 1}/${questions.length}`}
+                        </span>
                         <span className="badge rounded-pill bg-primary bg-opacity-10 text-primary border border-primary border-opacity-20 px-2" style={{fontSize: '0.6rem'}}>{difficulty.toUpperCase()}</span>
                     </div>
-                    <div className="d-flex align-items-center gap-3">
-                        {isTimed && !results && !evaluating && (
-                            <div className="d-flex align-items-center gap-2 px-3 py-1 rounded-pill bg-danger bg-opacity-10 text-danger border border-danger border-opacity-20"><Timer size={14}/> <span className="fw-bold">{timeLeft}s</span></div>
-                        )}
-                        <X onClick={onEnd} style={{ cursor: 'pointer' }} className="opacity-50" />
-                    </div>
+                    <X onClick={onEnd} style={{ cursor: 'pointer' }} className="text-white opacity-50" />
                 </div>
-                {!results && !evaluating && isTimed && (
-                    <div className="mb-4 w-100" style={{background: 'rgba(255,255,255,0.05)', height: '4px', borderRadius: '2px'}}><div className="timer-bar" style={{ width: `${(timeLeft/30)*100}%` }}></div></div>
-                )}
+
                 {evaluating ? (
-                    <div className="text-center py-5"><Loader2 className="spinner-border text-primary mb-3" /><p className="fw-bold opacity-50">ANALYZING RESPONSES...</p></div>
+                    <div className="text-center py-5 text-white">
+                        <Loader2 className="spinner-border text-primary mb-3 animate-spin" />
+                        <p className="fw-bold opacity-50 uppercase tracking-widest">ANALYZING DATA...</p>
+                    </div>
                 ) : results ? (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                         <div className="text-center mb-5">
-                            <h6 className="text-primary fw-bold tracking-widest uppercase mb-4">Neural Evaluation Complete</h6>
-                            <h1 className="display-1 fw-black mb-3 text-gradient">
-                                {(type === 'multi' || type === 'general') 
-                                    ? `${results.filter(r => r.score >= 8).length} / ${questions.length} Correct` 
-                                    : `${Math.round((results.reduce((acc, curr) => acc + curr.score, 0) / (questions.length * 10)) * 100)}%`
+                            <h6 className="text-primary fw-bold tracking-widest uppercase mb-2">Assessment Concluded</h6>
+                            <h1 className="display-3 fw-black mb-2 text-gradient">
+                                {isAdaptive 
+                                    ? `${Math.round((results.reduce((acc, curr) => acc + curr.score, 0) / (questions.length * 10)) * 100)}%`
+                                    : `${results.filter(r => r.score >= 8).length} / ${questions.length}`
                                 }
                             </h1>
-                            <p className="fs-5 opacity-50">Evaluation summary for {difficulty} level.</p>
+                            <p className="opacity-50 text-white small">Overall {isAdaptive ? 'Accuracy' : 'Correct Answers'} achieved.</p>
                         </div>
-                        <div className="mb-5">{results.map((res, i) => (
-                            <div key={i} className="p-4 mb-3 rounded-4" style={{background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)'}}>
-                                <div className="d-flex flex-column flex-md-row justify-content-between mb-2 small fw-bold">
-                                    <span className="text-primary">CHALLENGE {i+1}</span>
-                                    <span className={res.score >= 8 ? 'text-success' : 'text-danger'}>
-                                        {(type === 'multi' || type === 'general') 
-                                            ? (res.score >= 8 ? 'CORRECT' : 'INCORRECT') 
-                                            : `${res.score * 10}% Accuracy`
-                                        }
-                                    </span>
+
+                        <div className="d-flex flex-column gap-4 mb-5">
+                            {results.map((report, idx) => (
+                                <div key={idx} className="p-4 rounded-4 border border-white border-opacity-5 bg-black bg-opacity-40 text-white">
+                                    <div className="d-flex justify-content-between mb-3 align-items-start">
+                                        <span className="badge bg-dark bg-opacity-10 text-primary border border-primary border-opacity-20 px-3">Challenge {idx + 1}</span>
+                                        <span className={`fw-black uppercase tracking-widest ${report.score >= 8 ? 'text-success' : (report.score >= 5 ? 'text-primary' : 'text-danger')}`} style={{ fontSize: '0.75rem' }}>
+                                            {isAdaptive ? `${report.score * 10}% Accuracy` : (report.score >= 8 ? 'CORRECT' : 'INCORRECT')}
+                                        </span>
+                                    </div>
+                                    <h6 className="fw-bold mb-3" style={{ lineHeight: '1.4' }}>{report.challenge}</h6>
+                                    
+                                    <div className="p-3 rounded-3 bg-dark bg-opacity-5 border border-white border-opacity-5 mb-3">
+                                        <span className="text-primary opacity-50 d-block mb-1 uppercase fw-bold" style={{fontSize:'0.6rem'}}>Your Input :</span>
+                                        <div className="small opacity-90">{answers[idx]?.answer || "N/A"}</div>
+                                    </div>
+
+                                    <div className="p-3 rounded-3 border border-primary border-opacity-20 bg-primary bg-opacity-10">
+                                        <span className="text-primary d-block mb-1 fw-bold uppercase" style={{fontSize:'0.6rem'}}>AI Analysis</span>
+                                        <div className="small opacity-100">{report.feedback}</div>
+                                    </div>
                                 </div>
-                                <p className="small mb-0 opacity-70 italic">Feedback: {res.feedback}</p>
-                            </div>
-                        ))}</div>
-                        <button className="btn btn-primary btn-lg w-100 rounded-pill fw-bold" onClick={onEnd}>Return to Dashboard</button>
+                            ))}
+
+                            {suggestion && (
+                                <div className="p-4 rounded-4 shadow-lg" style={{ background: 'rgba(255, 193, 7, 0.1)', border: '2px solid #ffc107' }}>
+                                    <div className="d-flex align-items-center gap-2 mb-2">
+                                        <Brain size={20} style={{ color: '#ffc107' }} />
+                                        <span className="text-xs uppercase fw-black tracking-widest" style={{ color: '#ffc107' }}>Suggestion :</span>
+                                    </div>
+                                    <p className="small text-white opacity-90 mb-0 fw-bold italic">{suggestion}</p>
+                                </div>
+                            )}
+                        </div>
+                        <button className="btn btn-primary btn-lg w-100 rounded-pill fw-black py-3 shadow-lg" onClick={onEnd}>RETURN TO DASHBOARD</button>
                     </motion.div>
                 ) : (
                     <>
-                        <div className="mb-5 h2 challenge-text">{typeof currentChallenge === 'string' && currentChallenge.includes('Question:') ? currentChallenge.split('Question:').map((text, i) => <div key={i} className={i === 0 ? "scenario-text opacity-50 fs-5 mb-2" : ""}>{text}</div>) : currentChallenge}</div>
-                        {(type === 'multi' || type === 'general') && questions[currentStep]?.options ? (
-                            <div className="row g-3 mb-5">{questions[currentStep].options.map(o => (
-                                <div className="col-12 col-md-6" key={o}><button className={`btn w-100 py-3 rounded-4 fw-bold text-start px-4 transition-all ${currentInput === o ? 'btn-primary' : 'btn-outline-light opacity-50'}`} onClick={() => setCurrentInput(o)}>{o}</button></div>
-                            ))}</div>
-                        ) : (
-                            <textarea className="custom-input mb-5" style={{ minHeight: '150px' }} value={currentInput} onChange={e => setCurrentInput(e.target.value)} placeholder="Type your response..."/>
+                        {isTimed && (
+                            <div className="mb-4 w-100" style={{background: 'rgba(255,255,255,0.05)', height: '4px', borderRadius: '2px'}}>
+                                <div className="timer-bar" style={{ width: `${(timeLeft/30)*100}%` }}></div>
+                            </div>
                         )}
-                        <button className="btn btn-primary w-100 py-3 fw-bold rounded-4 shadow-lg" onClick={() => handleNext()} disabled={!currentInput && type !== 'adaptive'}>{currentStep === questions.length - 1 ? "FINISH ASSESSMENT" : "NEXT CHALLENGE"}</button>
+                        
+                        <div className="mb-5 h2 challenge-text text-white">
+                            {questions[currentStep]?.challenge}
+                        </div>
+
+                        {!isAdaptive ? (
+                            <div className="row g-3 mb-5">
+                                {questions[currentStep]?.options?.map(o => (
+                                    <div className="col-12 col-md-6" key={o}>
+                                        <button className={`btn w-100 py-3 rounded-4 fw-bold text-start px-4 transition-all ${currentInput === o ? 'btn-primary' : 'btn-outline-light opacity-50'}`} onClick={() => setCurrentInput(o)}>{o}</button>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <textarea className="custom-input mb-5 fs-5 shadow-sm" style={{ minHeight: '180px' }} value={currentInput} onChange={e => setCurrentInput(e.target.value)} placeholder="Type your neural response..."/>
+                        )}
+
+                        <button className="btn btn-primary w-100 py-3 fw-black rounded-4 shadow-lg mt-2" onClick={() => handleNext()} disabled={!currentInput}>
+                            {currentStep === questions.length - 1 ? "FINISH DIAGNOSTIC" : "NEXT CHALLENGE"}
+                        </button>
                     </>
                 )}
             </div>
@@ -938,10 +980,9 @@ const RoomsView = ({ user, refreshHistory }) => {
 
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <div className="mb-4"><h1 className="fw-black">Neural Rooms</h1><p className="opacity-50">Configure global synchronization parameters.</p></div>
-            <div className="row g-4">
+            <div className="row g-4" style={{marginTop:"-50px"}}>
                 <div className="col-lg-7">
-                    <div className="p-4 p-md-5 h-100" style={glassStyle}>
+                    <div className="p-4 h-100" style={glassStyle}>
                         <h3 className="fw-black mb-4 d-flex align-items-center gap-3"><Plus className="text-primary"/> Host Session</h3>
                         <div className="row g-3 mb-4">
                             <div className="col-12 text-white">

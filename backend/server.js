@@ -215,27 +215,51 @@ app.get("/room/:code", async (req, res) => {
 });
 
 // INDIVIDUAL ASSESSMENT: Added "concise" prompt
+// UPDATED ASSESSMENT GENERATION
 app.post("/generate-assessment", async (req, res) => {
     const { type, domains, limit, difficulty } = req.body;
     try {
-        let prompt = `Generate ${limit} ${difficulty} questions for ${domains.join(", ")}. JSON output.`;
+        let prompt = "";
+        
+        // Decide source material
+        const sourceMaterial = (type === 'general') 
+            ? "Global General Knowledge (Science, History, Tech, Geography, and Arts)" 
+            : domains.join(", ");
+
         if (type === 'adaptive') {
-            prompt = `Generate ${limit} situational scenarios for ${difficulty} level for ${domains.join(", ")}. 
-            CRITICAL: Each scenario must be under 40 words. JSON output.`;
+            prompt = `Generate ${limit} ${difficulty} situational scenarios for: ${sourceMaterial}. 
+            CRITICAL: Each scenario must be LESS THAN 25 WORDS. 
+            Format: JSON object with a "questions" array. Each item: {"challenge": "scenario text"}.`;
+        } else {
+            // MCQ or General Knowledge
+            prompt = `Generate ${limit} ${difficulty} level MCQ questions based on: ${sourceMaterial}. 
+            Format: Return a JSON object with a "questions" array. 
+            Each question must have: "challenge", "options" (array of 4 strings), "correctAnswer", and "explanation".`;
         }
+        
         const aiResponse = await callGitHubAI(prompt);
-        res.json(cleanJSON(aiResponse));
-    } catch (e) { res.status(500).json({ error: "Error" }); }
+        const data = cleanJSON(aiResponse);
+        res.json(data || { questions: [] });
+    } catch (e) { res.status(500).json({ error: "Generation Error" }); }
 });
 
-// EVALUATION: Improved scoping and suggestion logic
+// UPDATED EVALUATION BATCH
 app.post("/evaluate-batch", async (req, res) => {
     const { userId, username, answers, domains, sessionId, type, difficulty } = req.body;
     try {
         let evaluatedResults = [];
         let suggestion = "";
 
-        if (type === 'multi' || type === 'general') {
+        if (type === 'adaptive') {
+            const evalPrompt = `Evaluate situational responses: ${JSON.stringify(answers)}. 
+            Score each 0-10 based on accuracy and logic. Provide feedback and a "suggestion" string.
+            Format: {"results": [{"score": 0, "feedback": ""}], "suggestion": "topics"}`;
+            const aiResponse = await callGitHubAI(evalPrompt);
+            const data = cleanJSON(aiResponse);
+            evaluatedResults = data.results || [];
+            suggestion = data.suggestion || "Continue refining situational analysis.";
+        } else {
+            // MCQ and General Knowledge evaluation
             evaluatedResults = answers.map(ans => {
                 const isCorrect = ans.answer?.trim() === ans.correctAnswer?.trim();
                 return {
@@ -243,39 +267,29 @@ app.post("/evaluate-batch", async (req, res) => {
                     feedback: isCorrect ? "Correct answer." : `Incorrect. The correct answer was: ${ans.correctAnswer}`
                 };
             });
-            const aiReviewPrompt = `The student answered these questions: ${JSON.stringify(answers)}. 
-            Analyze mistakes and provide a "suggestion" string with 3 study topics. Output JSON.`;
+            const aiReviewPrompt = `User answered these questions: ${JSON.stringify(answers)}. Analyze mistakes and suggest 3 topics to study. Return JSON: {"suggestion": "string"}`;
             const aiResponse = await callGitHubAI(aiReviewPrompt);
             const data = cleanJSON(aiResponse);
-            suggestion = data?.suggestion || "Review the fundamentals.";
-        } else {
-            const evalPrompt = `Evaluate situational responses: ${JSON.stringify(answers)}. 
-            Score each 0-10. Provide feedback and a general "suggestion" string.
-            Format: {"results": [{"score": 0, "feedback": ""}], "suggestion": "topics"}`;
-            const aiResponse = await callGitHubAI(evalPrompt);
-            const data = cleanJSON(aiResponse);
-            evaluatedResults = data.results || [];
-            suggestion = data.suggestion || "Continue practicing these scenarios.";
+            suggestion = data?.suggestion || "Review core concepts for better accuracy.";
         }
 
-        // --- NEW: Perfect Score Appreciation Logic ---
-        const totalScoreObtained = evaluatedResults.reduce((acc, curr) => acc + curr.score, 0);
-        const maxPossibleScore = answers.length * 10;
-        if (totalScoreObtained === maxPossibleScore && maxPossibleScore > 0) {
-            suggestion = "Outstanding performance! You have achieved perfect neural synchronization. Mastery confirmed.";
+        const total = evaluatedResults.reduce((acc, curr) => acc + curr.score, 0);
+        if (total === (answers.length * 10) && total > 0) {
+            suggestion = "Outstanding! Perfect neural synchronization achieved. Mastery confirmed.";
         }
 
+        // Save History
         const savePromises = evaluatedResults.map((resItem, idx) => {
             return new Assessment({ 
                 userId, username, 
-                domain: domains?.join(", ") || "General", 
+                domain: (type === 'general') ? "General Knowledge" : domains.join(", "), 
                 challenge: answers[idx].challenge, 
                 answer: answers[idx].answer, 
                 correctAnswer: answers[idx].correctAnswer || "",
                 sessionId, type, difficulty, 
                 score: resItem.score, 
                 feedback: resItem.feedback,
-                suggestion: suggestion // Now contains appreciation if perfect
+                suggestion: suggestion 
             }).save();
         });
 
