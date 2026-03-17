@@ -33,7 +33,7 @@ const UserSchema = new mongoose.Schema({
 });
 const User = mongoose.model("User", UserSchema);
 
-// --- Update RoomSchema in backend ---
+// --- Room Schema ---
 const RoomSchema = new mongoose.Schema({ 
     roomCode: { type: String, unique: true }, 
     creatorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, 
@@ -100,6 +100,7 @@ const cleanJSON = (text) => {
     } catch (e) { return null; } 
 };
 
+
 // --- ROUTES ---
 
 app.post("/google-login", async (req, res) => {
@@ -136,6 +137,7 @@ app.post("/login", async (req, res) => {
 
 // CREATE ROOM: Added "concise" prompt for adaptive mode
 // CREATE ROOM: Now supports both AI generation AND Direct JSON Import
+
 app.post("/create-room", async (req, res) => {
     // 1. Added 'customQuestions' to the destructuring
     const { creatorId, username, roomCode, settings, studyMaterial, customQuestions } = req.body;
@@ -215,7 +217,6 @@ app.get("/room/:code", async (req, res) => {
 });
 
 // INDIVIDUAL ASSESSMENT: Added "concise" prompt
-// UPDATED ASSESSMENT GENERATION
 app.post("/generate-assessment", async (req, res) => {
     const { type, domains, limit, difficulty } = req.body;
     try {
@@ -243,7 +244,7 @@ app.post("/generate-assessment", async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Generation Error" }); }
 });
 
-// UPDATED EVALUATION BATCH
+// EVALUATION BATCH
 app.post("/evaluate-batch", async (req, res) => {
     const { userId, username, answers, domains, sessionId, type, difficulty } = req.body;
     try {

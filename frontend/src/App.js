@@ -1,19 +1,24 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-// --- ADDED GOOGLE IMPORTS ---
+
+// --- GOOGLE IMPORTS ---
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google'; 
+
 import { 
     LayoutDashboard, BookOpen, BarChart3, LogOut, Brain, Zap, 
     Loader2, X, Plus, ArrowRight, Target, Globe, TrendingUp, 
     Activity, ShieldCheck, Lock, Mail, User as UserIcon, Timer, TimerOff, Calendar, Menu, Users, Trophy,
-    RotateCw // Added this
+    RotateCw 
 } from 'lucide-react';
+
+// Boot Strap
 import 'bootstrap/dist/css/bootstrap.min.css';
 
 const glassStyle = { background: 'rgba(255, 255, 255, 0.02)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '24px' };
 
 const API_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
 
+// Circle chart
 const DifficultyCircle = ({ stats }) => {
     const radius = 35;
     const circum = 2 * Math.PI * radius;
@@ -173,7 +178,7 @@ const AuthPage = ({ onAuth }) => {
     const [formData, setFormData] = useState({ username: "", email: "", password: "" });
     const [loading, setLoading] = useState(false);
 
-    // --- ADDED GOOGLE SUCCESS HANDLER ---
+    // --- GOOGLE SUCCESS HANDLER ---
     const handleGoogleSuccess = async (credentialResponse) => {
         setLoading(true);
         try {
@@ -222,7 +227,7 @@ const AuthPage = ({ onAuth }) => {
                     <button className="auth-btn" disabled={loading}>{loading ? <Loader2 className="spinner-border spinner-border-sm" /> : <>{isRegister ? "Create Profile" : "Lets Start"}<ArrowRight size={18} className="ms-2" /></>}</button>
                 </form>
 
-                {/* --- ADDED GOOGLE LOGIN BUTTON --- */}
+                {/* --- GOOGLE LOGIN BUTTON --- */}
                 <div className="mt-4 d-flex justify-content-center">
                     <GoogleLogin 
                         onSuccess={handleGoogleSuccess} 
@@ -900,9 +905,7 @@ const RoomsView = ({ user, refreshHistory }) => {
         </motion.div>
     );
 
-    // ... Rest of the component (lobby, landing) remains the same
-
-    // ... (rest of the component: lobby, landing views remain unchanged)
+    // Lobby UI
     if (view === 'lobby') return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="min-vh-100 p-3 p-md-5">
             <div className="mx-auto mb-4 d-flex flex-column flex-lg-row gap-3 align-items-stretch" style={{ maxWidth: '950px' }}>
