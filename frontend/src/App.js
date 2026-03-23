@@ -588,17 +588,33 @@ const ActiveSession = ({ user, domains, type, limit, timerValue, onEnd }) => {
                         </div>
 
                         <div className="d-flex flex-column gap-4 mb-5">
-                            {results.map((report, idx) => (
+                            {results.map((report, idx) => {
+                            // 1. Determine the status text based on assessment type
+                            const isAdaptiveType = type === 'adaptive';
+                            const displayStatus = isAdaptiveType 
+                                ? `${report.score * 10}% Accuracy` 
+                                : (report.score >= 8 ? 'CORRECT' : 'INCORRECT');
+
+                            // 2. Determine status color
+                            let statusColorClass = 'text-danger';
+                            if (report.score >= 8) statusColorClass = 'text-success';
+                            else if (isAdaptiveType && report.score >= 5) statusColorClass = 'text-warning';
+
+                            return (
                                 <div key={idx} className="p-4 rounded-4 border border-white border-opacity-5 bg-dark shadow-lg text-white" style={{background: '#111827'}}>
                                     <div className="d-flex justify-content-between mb-3 align-items-start">
-                                        <span className="badge bg-dark bg-opacity-10 text-primary border border-primary border-opacity-20 px-3">Challenge {idx + 1}</span>
-                                        <span className={`fw-black uppercase tracking-widest ${report.score >= 8 ? 'text-success' : 'text-danger'}`} style={{ fontSize: '0.75rem' }}>
-                                            {report.score >= 8 ? 'CORRECT' : 'INCORRECT'}
+                                        <span className="badge bg-dark bg-opacity-10 text-primary border border-primary border-opacity-20 px-3">
+                                            Challenge {idx + 1}
+                                        </span>
+                                        {/* DYNAMIC LABEL: Percentage for Adaptive, Correct/Incorrect for others */}
+                                        <span className={`fw-black uppercase tracking-widest ${statusColorClass}`} style={{ fontSize: '0.75rem' }}>
+                                            {displayStatus}
                                         </span>
                                     </div>
+
                                     <h6 className="fw-bold mb-3" style={{ fontSize: '1.1rem' }}>{report.challenge}</h6>
                                     
-                                    {/* USER INPUT BOX */}
+                                    {/* USER INPUT BOX - Logic matches your previous images */}
                                     <div className="p-3 rounded-3 border border-white border-opacity-5 mb-3" style={{background: '#1f2937'}}>
                                         <span className="text-xxs uppercase opacity-50 d-block mb-1 fw-bold" style={{fontSize: '0.7rem'}}>
                                             {report.score >= 8 ? "Your Input :" : "Operative Response :"}
@@ -612,7 +628,8 @@ const ActiveSession = ({ user, domains, type, limit, timerValue, onEnd }) => {
                                         <div className="small opacity-100">{report.feedback}</div>
                                     </div>
                                 </div>
-                            ))}
+                            );
+                        })}
 
                             {suggestion && (
                                 <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="p-4 rounded-4 shadow-lg mt-2" style={{ background: 'rgba(255, 193, 7, 0.1)', border: '2px solid #ffc107' }}>
